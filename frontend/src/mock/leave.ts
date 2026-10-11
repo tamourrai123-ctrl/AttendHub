@@ -1,18 +1,76 @@
 import type { LeaveRecord } from "../types/leave";
 
-/**
- * MOCK DATA — development only. Seed data for `mockLeaveService`.
- *
- * Company Admin can only ever VIEW leave here — requesting/approving leave
- * is handled by the AttendHub mobile app, not this web panel.
- */
 export const MOCK_LEAVE_RECORDS: LeaveRecord[] = [
-  { id: "lv_001", employeeId: "emp_004", employeeName: "Sara Malik", companyId: "cmp_001", leaveType: "Sick Leave", startDate: "2026-09-07", endDate: "2026-09-08", status: "APPROVED" },
-  { id: "lv_002", employeeId: "emp_003", employeeName: "Ahmed Raza", companyId: "cmp_001", leaveType: "Casual Leave", startDate: "2026-09-15", endDate: "2026-09-15", status: "PENDING" },
-  { id: "lv_003", employeeId: "emp_002", employeeName: "Fatima Noor", companyId: "cmp_001", leaveType: "Annual Leave", startDate: "2026-09-20", endDate: "2026-09-24", status: "PENDING" },
-  { id: "lv_004", employeeId: "emp_001", employeeName: "John Carter", companyId: "cmp_001", leaveType: "Casual Leave", startDate: "2026-09-11", endDate: "2026-09-11", status: "APPROVED" },
-  { id: "lv_005", employeeId: "emp_007", employeeName: "Hamza Iqbal", companyId: "cmp_001", leaveType: "Sick Leave", startDate: "2026-08-28", endDate: "2026-08-29", status: "REJECTED" },
-
-  // XYZ Ltd (cmp_002) — must never surface for the ABC Pvt Ltd Company Admin.
-  { id: "lv_101", employeeId: "emp_101", employeeName: "Nida Farooq", companyId: "cmp_002", leaveType: "Annual Leave", startDate: "2026-09-12", endDate: "2026-09-16", status: "PENDING" },
+  {
+    id: "lv_001",
+    employeeId: "emp_004",
+    employeeName: "Sara Malik",
+    companyId: "cmp_001",
+    leaveType: "Sick Leave",
+    totalLeaveDays: 12,
+    entitledLeave: 12,
+    consumedLeave: 2,
+    availableLeaveBalance: 10,
+    leaveStatus: "Active",
+  },
+  {
+    id: "lv_002",
+    employeeId: "emp_003",
+    employeeName: "Ahmed Raza",
+    companyId: "cmp_001",
+    leaveType: "Casual Leave",
+    totalLeaveDays: 10,
+    entitledLeave: 10,
+    consumedLeave: 3,
+    availableLeaveBalance: 7,
+    leaveStatus: "Active",
+  },
+  {
+    id: "lv_003",
+    employeeId: "emp_002",
+    employeeName: "Fatima Noor",
+    companyId: "cmp_001",
+    leaveType: "Annual Leave",
+    totalLeaveDays: 20,
+    entitledLeave: 20,
+    consumedLeave: 5,
+    availableLeaveBalance: 15,
+    leaveStatus: "Active",
+  },
+  {
+    id: "lv_004",
+    employeeId: "emp_001",
+    employeeName: "John Carter",
+    companyId: "cmp_001",
+    leaveType: "Casual Leave",
+    totalLeaveDays: 10,
+    entitledLeave: 10,
+    consumedLeave: 1,
+    availableLeaveBalance: 9,
+    leaveStatus: "Active",
+  },
+  {
+    id: "lv_005",
+    employeeId: "emp_007",
+    employeeName: "Hamza Iqbal",
+    companyId: "cmp_001",
+    leaveType: "Sick Leave",
+    totalLeaveDays: 12,
+    entitledLeave: 12,
+    consumedLeave: 4,
+    availableLeaveBalance: 8,
+    leaveStatus: "Active",
+  },
+  {
+    id: "lv_101",
+    employeeId: "emp_101",
+    employeeName: "Nida Farooq",
+    companyId: "cmp_002",
+    leaveType: "Annual Leave",
+    totalLeaveDays: 20,
+    entitledLeave: 20,
+    consumedLeave: 2,
+    availableLeaveBalance: 18,
+    leaveStatus: "Active",
+  },
 ];

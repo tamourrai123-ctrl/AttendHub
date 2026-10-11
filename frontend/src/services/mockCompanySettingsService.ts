@@ -26,10 +26,9 @@ export async function updateCompanySettings(companyId: string, input: UpdateComp
 
   const current = settings[index];
   const updated: CompanySettings = {
-    ...current,
-    ...input,
-    preferences: { ...current.preferences, ...input.preferences },
-  };
+  ...current,
+  ...input,
+};
   settings = [...settings.slice(0, index), updated, ...settings.slice(index + 1)];
   return updated;
 }
