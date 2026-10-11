@@ -1,0 +1,130 @@
+import { Body, Controller, ForbiddenException, Get, HttpCode, HttpStatus, Post } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Roles } from '../common/decorators/roles.decorator';
+import { Role } from '../common/constants/roles.enum';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { AuthenticatedUser } from '../common/interfaces/authenticated-user.interface';
+import { ok } from '../common/dto/api-response.dto';
+import { HrLookupService } from './hr-lookup.service';
+import { LoginSessionService } from './login-session.service';
+import { QrAttendanceService } from './qr-attendance.service';
+import { HrLoginSessionDto } from './dto/hr-login-session.dto';
+import { HrWifiLookupDto } from './dto/hr-wifi-lookup.dto';
+import { HrDeviceInfoLookupDto } from './dto/hr-device-info-lookup.dto';
+
+/**
+ * Mobile-app-facing live lookups, forwarded to the caller's own company's HR
+ * system (see HrLookupService). companyId/employeeId always come from the
+ * caller's session, never the request. Nothing is stored on the hub side.
+ */
+@ApiTags('hr')
+@ApiBearerAuth()
+@Controller('hr')
+export class HrLookupController {
+  constructor(
+    private readonly hrLookupService: HrLookupService,
+    private readonly loginSessionService: LoginSessionService,
+    private readonly qrAttendanceService: QrAttendanceService,
+  ) {}
+
+  @Get('company-info')
+  @Roles(Role.EMPLOYEE, Role.COMPANY_ADMIN)
+  @ApiOperation({ summary: "Live company settings (geo-fencing, wifi validation, server time, ...) from the caller's own company's HR system." })
+  async companyInfo(@CurrentUser() user: AuthenticatedUser) {
+    return ok(await this.hrLookupService.getCompanyInfo(this.requireCompany(user)));
+  }
+
+  @Get('shift')
+  @Roles(Role.EMPLOYEE)
+  @ApiOperation({ summary: "The authenticated Employee's own current shift, live from HR." })
+  async shift(@CurrentUser() user: AuthenticatedUser) {
+    const companyId = this.requireCompany(user);
+    if (!user.employeeId) {
+      throw new ForbiddenException('This session has no employee id.');
+    }
+    return ok(await this.hrLookupService.getShift(companyId, user.employeeId));
+  }
+
+  @Get('leave')
+  @Roles(Role.EMPLOYEE)
+  @ApiOperation({ summary: "The authenticated Employee's own leave report, live from HR (uses the company's LEAVE endpoint mapping)." })
+  async leave(@CurrentUser() user: AuthenticatedUser) {
+    const companyId = this.requireCompany(user);
+    if (!user.employeeId) {
+      throw new ForbiddenException('This session has no employee id.');
+    }
+    return ok(await this.hrLookupService.getLeave(companyId, user.employeeId));
+  }
+
+  @Get('attendance-punches')
+  @Roles(Role.EMPLOYEE)
+  @ApiOperation({
+    summary: "The authenticated Employee's own raw punch history, live from HR — one row per punch, NOT grouped into days.",
+    description: 'The app groups punches into days itself. No date filter or paging: HR returns what it returns.',
+  })
+  async attendancePunches(@CurrentUser() user: AuthenticatedUser) {
+    const companyId = this.requireCompany(user);
+    if (!user.employeeId) {
+      throw new ForbiddenException('This session has no employee id.');
+    }
+    return ok(await this.hrLookupService.getAttendancePunches(companyId, user.employeeId, user.userId));
+  }
+
+  @Post('wifi')
+  @HttpCode(HttpStatus.OK)
+  @Roles(Role.EMPLOYEE)
+  @ApiOperation({
+    summary: 'Office WiFi information for one WiFi name, live from HR.',
+    description: 'POST, not GET, on purpose: the WiFi name is sent in the body so it never appears in request-URL logs.',
+  })
+  async wifi(@CurrentUser() user: AuthenticatedUser, @Body() dto: HrWifiLookupDto) {
+    return ok(await this.hrLookupService.getWifi(this.requireCompany(user), dto.wifiName));
+  }
+
+  @Post('device-info')
+  @HttpCode(HttpStatus.OK)
+  @Roles(Role.COMPANY_ADMIN)
+  @ApiOperation({
+    summary: "A user's device/session record from the Company Admin's own company's HR system.",
+    description:
+      'Company Admin only. POST, not GET, on purpose: the username is sent in the body so it never appears in request-URL ' +
+      'logs. Access/refresh tokens are returned only if the admin mapped them, only to the Company Admin, and are never logged or stored.',
+  })
+  async deviceInfo(@CurrentUser() user: AuthenticatedUser, @Body() dto: HrDeviceInfoLookupDto) {
+    return ok(await this.hrLookupService.getDeviceInfo(this.requireCompany(user), dto.username));
+  }
+
+  @Post('login-session')
+  @HttpCode(HttpStatus.OK)
+  @Roles(Role.EMPLOYEE)
+  @ApiOperation({
+    summary: "Register this device's login session with the caller's own company's HR system.",
+    description:
+      "Forwards the device facts through the company's \"Login Session\" endpoint mapping. company_id comes from the " +
+      'session. Only the fields the admin mapped are sent; nothing is stored or logged.',
+  })
+  async loginSession(@CurrentUser() user: AuthenticatedUser, @Body() dto: HrLoginSessionDto) {
+    if (!user.employeeId) {
+      throw new ForbiddenException('This session has no employee id.');
+    }
+    return ok(await this.loginSessionService.register(this.requireCompany(user), user.employeeId, dto));
+  }
+
+  @Post('qr-attendance/generate')
+  @HttpCode(HttpStatus.OK)
+  @Roles(Role.COMPANY_ADMIN)
+  @ApiOperation({
+    summary: "Ask the Company Admin's own company's HR system to generate a new QR attendance token.",
+    description: "Forwards HR's post_qrcode_attendance call (HR replaces the previous token every 30 seconds). Returns only whether HR accepted it.",
+  })
+  async generateQrToken(@CurrentUser() user: AuthenticatedUser) {
+    return ok(await this.qrAttendanceService.generate(this.requireCompany(user)));
+  }
+
+  private requireCompany(user: AuthenticatedUser): string {
+    if (!user.companyId) {
+      throw new ForbiddenException('This account is not associated with a company.');
+    }
+    return user.companyId;
+  }
+}

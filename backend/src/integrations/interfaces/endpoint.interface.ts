@@ -1,0 +1,47 @@
+/**
+ * Shape returned by the endpoint (integration_detail) CRUD API.
+ *
+ * `endpoint` stores the full relative path INCLUDING any static query
+ * string (e.g. "/employees?status=active"). Dynamic parts of that path can
+ * use "{{name}}" placeholders, filled in at test/execute time from the
+ * caller-supplied queryParams (see IntegrationEndpointExecutorService) —
+ * integration_detail has no column for structured/typed named parameters,
+ * so this is a schema-respecting, documented convention rather than a new
+ * "query_params" table or column. See the final report's minimum-schema
+ * recommendations for what a dedicated column would add.
+ */
+export type EndpointHttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+export type EndpointPayloadType = 'JSON' | 'XML' | 'FORM';
+export type EndpointStatus = 'ACTIVE' | 'INACTIVE';
+
+/**
+ * Whether this endpoint brings data IN from the HR system (Inbound) or
+ * sends data OUT to it (Outbound) — Phase 2 (Endpoints/Mapping tab).
+ * integration_detail has no column for this (no schema change was made for
+ * it, per this project's established "reuse existing columns via
+ * convention" pattern — see reserved-endpoint-names.constant.ts for the
+ * same approach applied to purpose). It is instead derived, always the same
+ * way, from httpMethod: GET has no side effects on the external system and
+ * is always a read; every other verb is always a write. Every real endpoint
+ * this codebase's own reserved purposes define fits that rule exactly (see
+ * constants/endpoint-purposes.constant.ts) — computed once in
+ * PrismaEndpointsRepository.toEndpoint() so every caller (API response,
+ * EndpointsService validation) sees the same value rather than
+ * recomputing it.
+ */
+export type EndpointDirection = 'INBOUND' | 'OUTBOUND';
+
+export interface IntegrationEndpoint {
+  id: string;
+  companyId: string;
+  integrationId: string;
+  name: string;
+  description: string | null;
+  endpoint: string;
+  httpMethod: EndpointHttpMethod;
+  direction: EndpointDirection;
+  requestType: EndpointPayloadType;
+  responseType: EndpointPayloadType;
+  sortOrder: number;
+  status: EndpointStatus;
+}

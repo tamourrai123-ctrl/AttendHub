@@ -1,0 +1,295 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model api_logs {
+  id               BigInt       @id @default(autoincrement())
+  company_id       String?      @db.VarChar(2)
+  user_id          BigInt?
+  request_method   String       @db.VarChar(10)
+  request_path     String       @db.VarChar(500)
+  request_body     String?
+  response_status  Int?
+  response_body    String?
+  ip_address       String?      @db.VarChar(45)
+  user_agent       String?      @db.VarChar(1000)
+  status           String?      @db.VarChar(20)
+  error_message    String?
+  add_by           String?      @db.VarChar(100)
+  add_date         DateTime     @default(now()) @db.Timestamp(6)
+  edit_by          String?      @db.VarChar(100)
+  edit_date        DateTime?    @db.Timestamp(6)
+  /// Added by scripts/add-monitoring-response-time-column.ts for the
+  /// Monitoring module's Postgres migration — nothing in this table tracked
+  /// how long a request took, which the "average response time" summary
+  /// stat needs. Nullable since rows written before this column existed (if
+  /// any) have nothing to backfill it with.
+  response_time_ms Int?
+  usm_company      usm_company? @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_api_logs_company")
+}
+
+model app_lov_detail {
+  id             BigInt
+  pid            BigInt
+  display        String         @db.VarChar(150)
+  return         String         @db.VarChar(3)
+  sorting        BigInt?
+  status         String?        @default("Y") @db.VarChar(3)
+  app_lov_master app_lov_master @relation(fields: [pid], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_lovm_app_ld")
+
+  @@id([pid, id], map: "pk_app_lov_detail")
+  @@unique([pid, return], map: "un_pid_return")
+}
+
+model app_lov_master {
+  id             BigInt           @id
+  title          String           @db.VarChar(150)
+  show_hide_flag String?          @default("Y") @db.VarChar(1)
+  app_lov_detail app_lov_detail[]
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model integration_detail {
+  id                        BigInt                      @default(autoincrement())
+  integration_id            BigInt
+  name                      String                      @db.VarChar(100)
+  description               String?                     @db.VarChar(255)
+  endpoint                  String                      @db.VarChar(500)
+  http_method               String                      @db.VarChar(10)
+  request_type              String                      @db.VarChar(20)
+  response_type             String                      @db.VarChar(20)
+  sort_order                Int                         @default(1)
+  status                    String                      @default("Y") @db.Char(1)
+  add_by                    String?                     @db.VarChar(50)
+  add_date                  DateTime?                   @default(now()) @db.Timestamp(6)
+  edit_by                   String?                     @db.VarChar(50)
+  edit_date                 DateTime?                   @db.Timestamp(6)
+  company_id                String                      @db.VarChar(2)
+  integration_master        integration_master          @relation(fields: [company_id, integration_id], references: [company_id, id], onDelete: NoAction, onUpdate: NoAction, map: "fk_id_id")
+  integration_field_mapping integration_field_mapping[]
+
+  @@id([company_id, id], map: "pk_id_id")
+  @@unique([company_id, integration_id, id], map: "un_integration_detail_company_integration_id")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model integration_master {
+  id                        BigInt                      @default(autoincrement())
+  company_id                String                      @db.VarChar(2)
+  integration_type          String?                     @db.VarChar(3)
+  auth_type                 String?                     @db.VarChar(3)
+  api_version               String?                     @db.VarChar(3)
+  base_url                  String                      @db.VarChar(500)
+  api_key                   String
+  api_secret                String
+  status                    String                      @default("Y") @db.Char(1)
+  add_by                    String?                     @db.VarChar(50)
+  add_date                  DateTime?                   @default(now()) @db.Timestamp(6)
+  edit_by                   String?                     @db.VarChar(50)
+  edit_date                 DateTime?                   @db.Timestamp(6)
+  integration_detail        integration_detail[]
+  integration_field_mapping integration_field_mapping[]
+  usm_company               usm_company                 @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_integration_master_company")
+  usm_users                 usm_users[]
+
+  @@id([company_id, id], map: "pk_im_id")
+}
+
+model pricing_detail {
+  id                  BigInt         @id @default(autoincrement())
+  pid                 BigInt
+  description         String?        @db.VarChar(255)
+  unit_of_measurement String?        @db.VarChar(50)
+  quantity            Decimal        @default(0) @db.Decimal(12, 2)
+  price               Decimal        @default(0) @db.Decimal(12, 2)
+  amount              Decimal        @default(0) @db.Decimal(14, 2)
+  add_date            DateTime       @default(now()) @db.Timestamp(6)
+  edit_date           DateTime?      @db.Timestamp(6)
+  pricing_master      pricing_master @relation(fields: [pid], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_pricing_detail_master")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model pricing_master {
+  id             BigInt           @id @default(autoincrement())
+  name           String           @db.VarChar(100)
+  short_name     String           @db.VarChar(50)
+  sort_order     Int              @default(1)
+  status         String           @default("Y") @db.Char(1)
+  /// Added by scripts/add-pricing-plan-columns.ts for the Pricing module's
+  /// Postgres migration. pricing_master/pricing_detail were evidently
+  /// modeled as a generic quotation/line-item schema (pricing_detail has
+  /// quantity/price/amount/unit_of_measurement), not a SaaS subscription
+  /// plan (monthly + yearly price, currency, a feature bullet list, a single
+  /// "recommended" flag) — see PrismaPlansRepository's own doc comment.
+  /// Rather than force pricing_detail's line-item columns to mean something
+  /// they don't, these six columns were added directly here instead, and
+  /// pricing_detail is left unused by this module — the same pattern this
+  /// project already uses for usm_users' added identity columns.
+  description    String?          @db.VarChar(500)
+  monthly_price  Decimal          @default(0) @db.Decimal(12, 2)
+  yearly_price   Decimal          @default(0) @db.Decimal(12, 2)
+  currency       String           @default("USD") @db.VarChar(10)
+  recommended    String           @default("N") @db.Char(1)
+  features       Json             @default("[]")
+  pricing_detail pricing_detail[]
+}
+
+model system_logs {
+  id             BigInt       @id @default(autoincrement())
+  company_id     String?      @db.VarChar(2)
+  user_id        BigInt?
+  action         String       @db.VarChar(100)
+  module         String?      @db.VarChar(50)
+  description    String?
+  ip_address     String?      @db.VarChar(45)
+  request_method String?      @db.VarChar(10)
+  request_path   String?      @db.VarChar(500)
+  status         String?      @db.VarChar(20)
+  created_at     DateTime     @default(now()) @db.Timestamp(6)
+  usm_company    usm_company? @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_system_logs_company")
+}
+
+model usm_company {
+  id                         String                      @id @db.VarChar(2)
+  title                      String                      @unique(map: "un_title_company") @db.VarChar(200)
+  shortname                  String                      @unique(map: "un_shortname_company") @db.VarChar(10)
+  address                    String?                     @db.VarChar(100)
+  phone                      String?                     @db.VarChar(20)
+  fax                        String?                     @db.VarChar(20)
+  website                    String?                     @db.VarChar(50)
+  url                        String?                     @db.VarChar(20)
+  GST_                       String?                     @map("GST#") @db.VarChar(30)
+  NTN_                       String?                     @map("NTN#") @db.VarChar(30)
+  city                       Int?
+  state                      Int?
+  zip                        Int?
+  country                    Int
+  status                     String                      @default("Y") @db.Char(1)
+  logo                       Bytes?
+  no_of_users                Int?                        @default(1)
+  account_type               String?                     @default("D") @db.Char(1)
+  employee_name              String?                     @db.VarChar(100)
+  department_name            String?                     @db.VarChar(30)
+  geo_fencing                String?                     @default("N") @db.Char(1)
+  wifi_validation            String?                     @default("N") @db.Char(1)
+  selfie_mandatory           String?                     @default("N") @db.Char(1)
+  mock_gps_detection         String?                     @default("N") @db.Char(1)
+  developer_options          String?                     @default("N") @db.Char(1)
+  default_geo_radius         Decimal?                    @default(100) @db.Decimal
+  offline_attendance_allowed String?                     @default("N") @db.Char(1)
+  break_flag                 String?                     @default("N") @db.Char(1)
+  time_zone                  String?                     @db.VarChar(50)
+  latitude                   Decimal?                    @db.Decimal
+  longitude                  Decimal?                    @db.Decimal
+  auto_logout                String?                     @default("N") @db.Char(1)
+  add_by                     String?                     @db.VarChar(50)
+  add_date                   DateTime?                   @db.Timestamp(6)
+  edit_by                    String?                     @db.VarChar(50)
+  edit_date                  DateTime?                   @db.Timestamp(6)
+  pid                        String?                     @db.VarChar(2)
+  api_logs                   api_logs[]
+  integration_field_mapping  integration_field_mapping[]
+  integration_master         integration_master[]
+  system_logs                system_logs[]
+  usm_company                usm_company?                @relation("usm_companyTousm_company", fields: [pid], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_usm_company_pid")
+  other_usm_company          usm_company[]               @relation("usm_companyTousm_company")
+  usm_users                  usm_users[]
+}
+
+/// This table contains a partial (filtered) unique index —
+/// un_usm_users_company_integration_external_employee_id, on
+/// (company_id, integration_id, external_employee_id) WHERE integration_id
+/// IS NOT NULL AND external_employee_id IS NOT NULL — that Prisma's schema
+/// language cannot fully represent (see https://pris.ly/d/partial-indexes).
+/// It is still enforced at the database level; see
+/// scripts/add-employee-identity-columns.ts, which created it, for the
+/// exact DDL. The @@index below reflects the same columns without the
+/// WHERE clause, which is as much as this schema format can express.
+model usm_users {
+  company_id              String              @db.VarChar(2)
+  user_id                 BigInt              @default(autoincrement())
+  user_name               String              @db.VarChar(50)
+  c_password              String              @db.VarChar(255)
+  email_address           String              @unique(map: "un_usm_users_email_address") @db.VarChar(150)
+  phone                   String?             @db.VarChar(20)
+  mobile                  String?             @db.VarChar(20)
+  skype                   String?             @db.VarChar(150)
+  is_admin                String              @db.VarChar(3)
+  account_locked          String              @db.VarChar(3)
+  super_admin             String?             @db.VarChar(3)
+  email_verified          String              @default("N") @db.Char(1)
+  email_verify_token_hash String?             @db.Char(64)
+  email_verify_expires    DateTime?           @db.Timestamp(6)
+  reset_token_hash        String?             @db.Char(64)
+  reset_token_expires     DateTime?           @db.Timestamp(6)
+  integration_id          BigInt?
+  external_employee_id    String?             @db.VarChar(100)
+  usm_company             usm_company         @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_usm_users_company")
+  integration_master      integration_master? @relation(fields: [company_id, integration_id], references: [company_id, id], onDelete: NoAction, onUpdate: NoAction, map: "fk_usm_users_integration")
+
+  @@id([company_id, user_id], map: "pk_usm_users")
+  @@index([external_employee_id], map: "idx_usm_users_external_employee_id")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model integration_field_mapping {
+  id                 BigInt             @default(autoincrement())
+  company_id         String             @db.VarChar(2)
+  integration_id     BigInt
+  endpoint_id        BigInt
+  source_path        String             @db.VarChar(500)
+  target_field       String             @db.VarChar(100)
+  transform_type     String             @default("NONE") @db.VarChar(20)
+  transform_config   Json               @default("{}")
+  sort_order         Int                @default(1)
+  status             String             @default("Y") @db.Char(1)
+  add_by             String?            @db.VarChar(50)
+  add_date           DateTime?          @default(now()) @db.Timestamp(6)
+  edit_by            String?            @db.VarChar(50)
+  edit_date          DateTime?          @db.Timestamp(6)
+  usm_company        usm_company        @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ifm_company")
+  integration_detail integration_detail @relation(fields: [company_id, integration_id, endpoint_id], references: [company_id, integration_id, id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ifm_endpoint")
+  integration_master integration_master @relation(fields: [company_id, integration_id], references: [company_id, id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ifm_integration")
+
+  @@id([company_id, id], map: "pk_integration_field_mapping")
+  @@unique([company_id, integration_id, endpoint_id, source_path, target_field], map: "un_ifm_no_duplicate")
+  @@index([company_id, integration_id, endpoint_id, sort_order], map: "idx_integration_field_mapping_lookup")
+}
+
+model usm_user_sessions {
+  id          BigInt    @id @default(autoincrement())
+  user_key    String    @db.VarChar(255)
+  role        String    @db.VarChar(20)
+  company_id  String?   @db.VarChar(20)
+  employee_id String?   @db.VarChar(20)
+  token_hash  String    @unique(map: "un_user_sessions_token_hash") @db.Char(64)
+  issued_at   DateTime  @default(now()) @db.Timestamp(6)
+  expires_at  DateTime  @db.Timestamp(6)
+  revoked_at  DateTime? @db.Timestamp(6)
+
+  @@index([expires_at], map: "idx_user_sessions_expires_at")
+  @@index([user_key], map: "idx_user_sessions_user_key")
+}
+
+/// Platform-wide settings — a deliberate SINGLETON table (exactly one row,
+/// always id=1, enforced by the CHECK constraint below, not just by
+/// convention). See scripts/create-platform-settings-table.ts for the full
+/// design rationale (why a new table, the Y/N flag convention, and why the
+/// three alert toggles default to 'Y'). Backs SettingsService, replacing
+/// InMemorySettingsRepository's process-wide value that used to reset on
+/// every server restart.
+model platform_settings {
+  id                      Int       @id(map: "pk_platform_settings") @default(1) @db.SmallInt
+  session_timeout_minutes Int       @default(1440)
+  require_two_step_login  String    @default("N") @db.Char(1)
+  system_error_alerts     String    @default("Y") @db.Char(1)
+  api_failure_alerts      String    @default("Y") @db.Char(1)
+  integration_warnings    String    @default("Y") @db.Char(1)
+  edit_by                 String?   @db.VarChar(50)
+  edit_date               DateTime? @db.Timestamp(6)
+}
