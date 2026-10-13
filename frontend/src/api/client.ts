@@ -19,7 +19,12 @@ import { clearSession, getToken } from "./session";
  * (and, for 400s, the backend's field-level messages), never raw payloads.
  */
 
-const DEFAULT_BASE_URL = "http://localhost:3000/api";
+// Dev falls back to the local backend; a production build (Vercel) falls back
+// to the deployed backend, so a missing VITE_API_BASE_URL never points a live
+// site at localhost.
+const DEFAULT_BASE_URL = import.meta.env.PROD
+  ? "https://tameotam-y5a6.vercel.app/api"
+  : "http://localhost:3000/api";
 
 function resolveBaseUrl(): string {
   const configured = import.meta.env.VITE_API_BASE_URL;
