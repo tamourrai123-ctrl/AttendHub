@@ -47,23 +47,35 @@ async function bootstrap(): Promise<void> {
     })
     .build();
 
-  typescript
-const swaggerDocument = SwaggerModule.createDocument(
-  app,
-  swaggerConfig,
-);
+const swaggerDocument = SwaggerModule.createDocument(app, swaggerConfig);
 
-SwaggerModule.setup('api/docs', app, swaggerDocument, {
-  useGlobalPrefix: false,
-  jsonDocumentUrl: 'api/docs-json',
-  customCssUrl:
-    'https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css',
-  customJs: [
-    'https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js',
-    'https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-standalone-preset.js',
-  ],
-});
-
+  // Swagger UI is served as a self-contained HTML page that loads its JS/CSS
+  // from a CDN. On Vercel (serverless) swagger-ui-express's own static files
+  // (swagger-ui-init.js etc.) don't resolve, which shows a blank page — this
+  // version needs no static files from the server at all.
+  const http = app.getHttpAdapter().getInstance();
+  http.get('/api/docs-json', (_req: unknown, res: any) => res.json(swaggerDocument));
+  http.get(['/api/docs', '/api/docs/'], (_req: unknown, res: any) => {
+    res.type('html').send(`<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>AttendHub API Docs</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.17.14/swagger-ui.css" />
+</head>
+<body>
+  <div id="swagger-ui"></div>
+  <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.17.14/swagger-ui-bundle.js"></script>
+  <script>
+    window.ui = SwaggerUIBundle({
+      url: '/api/docs-json',
+      dom_id: '#swagger-ui',
+      persistAuthorization: true,
+    });
+  </script>
+</body>
+</html>`);
+  });
 
   await app.listen(port);
 }
