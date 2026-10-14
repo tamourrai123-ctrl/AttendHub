@@ -12,6 +12,9 @@ import {
   ATTENDANCE_PUNCHES_ENDPOINT_NAME,
   LOGIN_SESSION_ENDPOINT_NAME,
   QR_ATTENDANCE_ENDPOINT_NAME,
+  LEAVE_POST_ENDPOINT_NAME,
+  HOLIDAYS_ENDPOINT_NAME,
+  ANNOUNCEMENTS_ENDPOINT_NAME,
 } from './reserved-endpoint-names.constant';
 
 /**
@@ -395,6 +398,61 @@ export const ENDPOINT_PURPOSES: EndpointPurposeDefinition[] = [
       'hub only forwards the call and reports whether HR accepted it. Employees then punch with the scanned code ' +
       'through the Post Attendance endpoint\'s "QR Code" field.',
     fields: [],
+  },
+  {
+    name: LEAVE_POST_ENDPOINT_NAME,
+    label: 'Apply for Leave (send to HR)',
+    direction: 'OUTBOUND',
+    defaultHttpMethod: 'POST',
+    description:
+      'Forwards a leave application received from the mobile app (POST /api/hr/leave) to the HR system. Map these ' +
+      "AttendHub fields to whatever field names the HR system's leave-application API expects; only the fields you " +
+      'map are sent. Nothing is stored on the hub side.',
+    fields: [
+      { field: 'companyId', label: 'Company ID' },
+      { field: 'employeeCode', label: 'Employee Code' },
+      { field: 'employeeName', label: 'Employee Name' },
+      { field: 'leaveType', label: 'Leave Type' },
+      { field: 'fromDate', label: 'From Date' },
+      { field: 'toDate', label: 'To Date' },
+      { field: 'totalDays', label: 'Total Days' },
+      { field: 'reason', label: 'Reason' },
+      { field: 'appliedOn', label: 'Applied On' },
+      { field: 'source', label: 'Source' },
+    ],
+  },
+  {
+    name: HOLIDAYS_ENDPOINT_NAME,
+    label: 'Holidays (fetch from HR)',
+    direction: 'INBOUND',
+    defaultHttpMethod: 'GET',
+    description:
+      "Reads the company's holiday list from the HR system for the mobile app (GET /api/hr/holidays). The path may use " +
+      '{{shortname}} and {{employeeId}}. Map the HR system\'s response fields to these.',
+    fields: [
+      { field: 'companyId', label: 'Company ID' },
+      { field: 'holidayDate', label: 'Holiday Date' },
+      { field: 'title', label: 'Holiday Name' },
+      { field: 'description', label: 'Description' },
+      { field: 'holidayType', label: 'Holiday Type' },
+    ],
+  },
+  {
+    name: ANNOUNCEMENTS_ENDPOINT_NAME,
+    label: 'Announcements (fetch from HR)',
+    direction: 'INBOUND',
+    defaultHttpMethod: 'GET',
+    description:
+      "Reads the company's announcements from the HR system for the mobile app (GET /api/hr/announcements). The path may " +
+      "use {{shortname}} and {{employeeId}}. Map the HR system's response fields to these.",
+    fields: [
+      { field: 'companyId', label: 'Company ID' },
+      { field: 'announcementId', label: 'Announcement ID' },
+      { field: 'title', label: 'Title' },
+      { field: 'message', label: 'Message' },
+      { field: 'postedOn', label: 'Posted On' },
+      { field: 'expiresOn', label: 'Expires On' },
+    ],
   },
 ];
 

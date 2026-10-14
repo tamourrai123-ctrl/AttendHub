@@ -7,9 +7,11 @@ import { HrLiveFetchService } from './services/hr-live-fetch.service';
 import { nameFromStatelessUserKey } from './utils/stateless-session.util';
 import {
   ATTENDANCE_FETCH_ENDPOINT_NAME,
+  ANNOUNCEMENTS_ENDPOINT_NAME,
   ATTENDANCE_PUNCHES_ENDPOINT_NAME,
   COMPANY_INFO_ENDPOINT_NAME,
   DEVICE_INFO_ENDPOINT_NAME,
+  HOLIDAYS_ENDPOINT_NAME,
   LEAVE_ENDPOINT_NAME,
   SHIFT_RECORD_ENDPOINT_NAME,
   WIFI_INFO_ENDPOINT_NAME,
@@ -85,6 +87,16 @@ export class HrLookupService {
       }
       throw error;
     }
+  }
+
+  /** The company's holiday list, live from HR (uses the company's HOLIDAYS endpoint mapping). */
+  async getHolidays(companyId: string, employeeId?: string): Promise<Record<string, unknown>[]> {
+    return this.fetch(companyId, HOLIDAYS_ENDPOINT_NAME, employeeId ? { employeeId } : {});
+  }
+
+  /** The company's announcements, live from HR (uses the company's ANNOUNCEMENTS endpoint mapping). */
+  async getAnnouncements(companyId: string, employeeId?: string): Promise<Record<string, unknown>[]> {
+    return this.fetch(companyId, ANNOUNCEMENTS_ENDPOINT_NAME, employeeId ? { employeeId } : {});
   }
 
   async getWifi(companyId: string, wifiName: string): Promise<Record<string, unknown>[]> {

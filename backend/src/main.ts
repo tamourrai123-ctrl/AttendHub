@@ -20,8 +20,14 @@ async function bootstrap(): Promise<void> {
 
   app.setGlobalPrefix('api');
 
+  // FRONTEND_URL may hold several comma-separated origins.
+  const allowedOrigins = frontendUrl
+    .split(',')
+    .map((o: string) => o.trim().replace(/\/+$/, ''))
+    .filter(Boolean);
+
   app.enableCors({
-    origin: frontendUrl,
+    origin: allowedOrigins,
     credentials: true,
   });
 

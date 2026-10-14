@@ -110,15 +110,19 @@ describe('HrLookupController roles', () => {
     for (const method of ['shift', 'wifi', 'leave', 'attendancePunches'] as const) {
       expect(rolesOf(method)).toEqual([Role.EMPLOYEE]);
     }
+    expect(rolesOf('applyLeave')).toEqual([Role.EMPLOYEE]);
+    for (const method of ['holidays', 'announcements'] as const) {
+      expect(rolesOf(method)).toEqual([Role.EMPLOYEE, Role.COMPANY_ADMIN]);
+    }
     expect(rolesOf('companyInfo')).toEqual([Role.EMPLOYEE, Role.COMPANY_ADMIN]);
   });
 });
 
 describe('HR API document coverage', () => {
-  it('shows exactly the 10 document APIs in the picker', () => {
+  it('shows exactly the 13 APIs in the picker', () => {
     const shown = ENDPOINT_PURPOSES.filter((p) => !p.hideFromPicker).map((p) => p.name).sort();
     expect(shown).toEqual(
-      ['ATTENDANCE_FETCH', 'ATTENDANCE_POST', 'COMPANY_INFO', 'DEVICE_INFO', 'EMPLOYEE_LOGIN', 'LEAVE', 'LOGIN_SESSION', 'QR_ATTENDANCE', 'SHIFT_RECORD', 'WIFI_INFO'],
+      ['ANNOUNCEMENTS', 'ATTENDANCE_FETCH', 'ATTENDANCE_POST', 'COMPANY_INFO', 'DEVICE_INFO', 'EMPLOYEE_LOGIN', 'HOLIDAYS', 'LEAVE', 'LEAVE_POST', 'LOGIN_SESSION', 'QR_ATTENDANCE', 'SHIFT_RECORD', 'WIFI_INFO'],
     );
   });
 });

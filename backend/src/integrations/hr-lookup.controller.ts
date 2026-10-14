@@ -4,12 +4,15 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { Role } from '../common/constants/roles.enum';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../common/interfaces/authenticated-user.interface';
-import { ok } from '../common/dto/api-response.dto';
+import { ok, okMessage } from '../common/dto/api-response.dto';
 import { HrLookupService } from './hr-lookup.service';
 import { LoginSessionService } from './login-session.service';
 import { QrAttendanceService } from './qr-attendance.service';
 import { HrLoginSessionDto } from './dto/hr-login-session.dto';
 import { HrWifiLookupDto } from './dto/hr-wifi-lookup.dto';
+import { PostLeaveApplicationDto } from './dto/post-leave-application.dto';
+import { LeaveApplyService } from './leave-apply.service';
+import { nameFromStatelessUserKey } from './utils/stateless-session.util';
 import { HrDeviceInfoLookupDto } from './dto/hr-device-info-lookup.dto';
 
 /**
@@ -25,6 +28,7 @@ export class HrLookupController {
     private readonly hrLookupService: HrLookupService,
     private readonly loginSessionService: LoginSessionService,
     private readonly qrAttendanceService: QrAttendanceService,
+    private readonly leaveApplyService: LeaveApplyService,
   ) {}
 
   @Get('company-info')
@@ -54,6 +58,38 @@ export class HrLookupController {
       throw new ForbiddenException('This session has no employee id.');
     }
     return ok(await this.hrLookupService.getLeave(companyId, user.employeeId));
+  }
+
+  @Post('leave')
+  @HttpCode(HttpStatus.OK)
+  @Roles(Role.EMPLOYEE)
+  @ApiOperation({
+    summary: "Submit the authenticated Employee's leave application to their company's HR system.",
+    description:
+      'Pure pass-through to the company\'s "Apply for Leave" endpoint via its configured field mapping: nothing is stored on ' +
+      "AttendHub's side. If HR is unreachable or rejects it, this call fails and the employee can retry. Employee identity " +
+      'always comes from the session, never the body.',
+  })
+  async applyLeave(@CurrentUser() user: AuthenticatedUser, @Body() dto: PostLeaveApplicationDto) {
+    if (!user.employeeId) {
+      throw new ForbiddenException('This session has no employee id.');
+    }
+    await this.leaveApplyService.apply(this.requireCompany(user), user.employeeId, dto, nameFromStatelessUserKey(user.userId));
+    return okMessage('Leave application submitted.');
+  }
+
+  @Get('holidays')
+  @Roles(Role.EMPLOYEE, Role.COMPANY_ADMIN)
+  @ApiOperation({ summary: "The company's holiday list, live from HR." })
+  async holidays(@CurrentUser() user: AuthenticatedUser) {
+    return ok(await this.hrLookupService.getHolidays(this.requireCompany(user), user.employeeId));
+  }
+
+  @Get('announcements')
+  @Roles(Role.EMPLOYEE, Role.COMPANY_ADMIN)
+  @ApiOperation({ summary: "The company's announcements, live from HR." })
+  async announcements(@CurrentUser() user: AuthenticatedUser) {
+    return ok(await this.hrLookupService.getAnnouncements(this.requireCompany(user), user.employeeId));
   }
 
   @Get('attendance-punches')

@@ -19,6 +19,7 @@ import { EmployeeSyncSchedulerService } from './services/employee-sync-scheduler
 import { AttendancePunchController } from './attendance-punch.controller';
 import { AttendancePunchService } from './attendance-punch.service';
 import { LoginSessionService } from './login-session.service';
+import { LeaveApplyService } from './leave-apply.service';
 import { QrAttendanceService } from './qr-attendance.service';
 import { MobileAuthController } from './mobile-auth.controller';
 import { MobileAuthService } from './mobile-auth.service';
@@ -124,6 +125,7 @@ import { HrLookupService } from './hr-lookup.service';
     EmployeeSyncService,
     EmployeeSyncSchedulerService,
     AttendancePunchService,
+    LeaveApplyService,
     LoginSessionService,
     QrAttendanceService,
     MobileAuthService,

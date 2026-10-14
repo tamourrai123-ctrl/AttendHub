@@ -98,3 +98,16 @@ export const LOGIN_SESSION_ENDPOINT_NAME = 'LOGIN_SESSION';
 
 /** POST: asks the HR system to generate a new QR token (HR's "post_qrcode_attendance" API — it replaces the previous token every 30 seconds). Outbound, no fields. */
 export const QR_ATTENDANCE_ENDPOINT_NAME = 'QR_ATTENDANCE';
+
+/**
+ * Mobile app additions (same reserved-name convention).
+ *
+ * LEAVE_POST_ENDPOINT_NAME (Outbound/POST): forwards a leave application received from the mobile app
+ * (POST /api/hr/leave) to the HR system. Like ATTENDANCE_POST, nothing is stored on the hub side.
+ *
+ * HOLIDAYS_ENDPOINT_NAME / ANNOUNCEMENTS_ENDPOINT_NAME (Inbound/GET): live, read-only lists for the mobile app
+ * (GET /api/hr/holidays, GET /api/hr/announcements). The path may use {{shortname}} and {{employeeId}}.
+ */
+export const LEAVE_POST_ENDPOINT_NAME = 'LEAVE_POST';
+export const HOLIDAYS_ENDPOINT_NAME = 'HOLIDAYS';
+export const ANNOUNCEMENTS_ENDPOINT_NAME = 'ANNOUNCEMENTS';

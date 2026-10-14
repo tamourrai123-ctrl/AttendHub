@@ -15,6 +15,8 @@ import { EMPLOYEE_LOGIN_ENDPOINT_NAME } from './constants/reserved-endpoint-name
 import { MobileLoginDto } from './dto/mobile-login.dto';
 import { LoginSessionService } from './login-session.service';
 import { MobileLoginResult } from './interfaces/mobile-login-result.interface';
+import { MobileRefreshResult } from './interfaces/mobile-refresh-result.interface';
+import { AuthenticatedUser } from '../common/interfaces/authenticated-user.interface';
 import { HR_EMPLOYEE_ID_MAX_LENGTH, buildStatelessUserKey } from './utils/stateless-session.util';
 
 /** AttendHub's own request-side fields on the EMPLOYEE_LOGIN purpose — see endpoint-purposes.constant.ts. */
@@ -177,6 +179,54 @@ export class MobileAuthService {
     }
 
     return loginResult;
+  }
+
+  /**
+   * Ends the caller's own mobile session: the token is revoked in the database, so it stops working immediately
+   * (idempotent — revoking an already-revoked token is a no-op). Only the token itself is touched; nothing on the
+   * HR side is changed.
+   */
+  async logout(token: string): Promise<void> {
+    await this.sessionsRepository.revoke(token);
+    this.systemLogsService.record({
+      user: 'mobile-user',
+      action: 'MOBILE_LOGOUT',
+      resource: 'Auth',
+      description: 'An employee logged out from the mobile app.',
+    });
+  }
+
+  /**
+   * Sliding session: swaps a still-valid token for a brand-new one with a fresh lifetime and revokes the old one.
+   * The caller must already be authenticated (AuthGuard has validated `currentToken` and filled `user`), so an
+   * expired or revoked token can NOT be refreshed — the app has to call this BEFORE the token expires and fall back
+   * to a normal login otherwise. Identity (company, HR employee id, display name) is carried over unchanged; HR is
+   * not contacted, so a refresh never re-checks the password.
+   */
+  async refresh(currentToken: string, user: AuthenticatedUser): Promise<MobileRefreshResult> {
+    if (!user.companyId || !user.employeeId) {
+      throw new ForbiddenException('This session has no employee profile.');
+    }
+    const ttlSeconds = await this.settingsService.getSessionTimeoutSeconds();
+    const token = await this.jwtService.signAsync(
+      { sub: user.userId, role: Role.EMPLOYEE, companyId: user.companyId, employeeId: user.employeeId, jti: generateSessionId() },
+      { expiresIn: `${ttlSeconds}s` },
+    );
+    // Create the new session first, revoke the old one second: if the second step fails the employee simply has two
+    // valid tokens until the old one expires, never zero.
+    await this.sessionsRepository.create(
+      { token, userId: user.userId, role: Role.EMPLOYEE, companyId: user.companyId, employeeId: user.employeeId },
+      ttlSeconds,
+    );
+    await this.sessionsRepository.revoke(currentToken);
+    this.systemLogsService.record({
+      user: 'mobile-user',
+      action: 'MOBILE_TOKEN_REFRESH',
+      resource: 'Auth',
+      description: 'A mobile app session token was refreshed.',
+      metadata: { companyId: user.companyId },
+    });
+    return { token, expiresAt: new Date(Date.now() + ttlSeconds * 1000).toISOString() };
   }
 
   /** The hub's own session token and its expiry, for HR's login_sessions record (sent only if the admin mapped them; the hub has no refresh token). */

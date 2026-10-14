@@ -20,6 +20,8 @@ export type SystemLogResource =
   // src/integrations/attendance-punch.service.ts. Purely additive, same as
   // 'IntegrationEndpoint'/'FieldMapping'/'HrEmployee' above.
   | 'AttendancePunch'
+  // Added for the mobile leave-application forwarding (src/integrations/leave-apply.service.ts). Purely additive.
+  | 'LeaveApplication'
   | 'Settings'
   | 'Auth'
   | 'Employee'

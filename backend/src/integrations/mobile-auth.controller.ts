@@ -1,7 +1,11 @@
-import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
-import { ApiBody, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Headers, HttpCode, HttpStatus, Post } from '@nestjs/common';
+import { ApiBearerAuth, ApiBody, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Public } from '../common/decorators/public.decorator';
-import { ok } from '../common/dto/api-response.dto';
+import { ok, okMessage } from '../common/dto/api-response.dto';
+import { Roles } from '../common/decorators/roles.decorator';
+import { Role } from '../common/constants/roles.enum';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { AuthenticatedUser } from '../common/interfaces/authenticated-user.interface';
 import { MobileAuthService } from './mobile-auth.service';
 import { MobileLoginDto } from './dto/mobile-login.dto';
 
@@ -36,4 +40,37 @@ export class MobileAuthController {
   async login(@Body() dto: MobileLoginDto) {
     return ok(await this.mobileAuthService.login(dto));
   }
+
+  @Post('logout')
+  @HttpCode(HttpStatus.OK)
+  @Roles(Role.EMPLOYEE)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: "Log out of the mobile app: revokes the caller's own session token.",
+    description: 'The token stops working immediately. Idempotent. The app should also delete its stored token.',
+  })
+  async logout(@Headers('authorization') authorization: string) {
+    await this.mobileAuthService.logout(bearerToken(authorization));
+    return okMessage('Logged out.');
+  }
+
+  @Post('refresh')
+  @HttpCode(HttpStatus.OK)
+  @Roles(Role.EMPLOYEE)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Swap a still-valid mobile session token for a new one with a fresh lifetime.',
+    description:
+      'Send the current token as the Bearer token; the response carries a NEW token (and its expiry) and the old one is ' +
+      'revoked. An expired or revoked token cannot be refreshed — call this before the token expires, otherwise log in again. ' +
+      'HR is not contacted, so the password is not re-checked.',
+  })
+  async refresh(@Headers('authorization') authorization: string, @CurrentUser() user: AuthenticatedUser) {
+    return ok(await this.mobileAuthService.refresh(bearerToken(authorization), user));
+  }
+}
+
+/** The raw token from an "Authorization: Bearer <token>" header (AuthGuard has already validated the header on these routes). */
+function bearerToken(authorization: string | undefined): string {
+  return (authorization ?? '').replace(/^Bearer\s+/i, '').trim();
 }
