@@ -15,6 +15,7 @@ import { AttendanceModule } from './attendance/attendance.module';
 import { LeaveModule } from './leave/leave.module';
 import { IntegrationsModule } from './integrations/integrations.module';
 import { PricingModule } from './pricing/pricing.module';
+import { SubscriptionsModule } from './subscriptions/subscriptions.module';
 import { ReportsModule } from './reports/reports.module';
 import { MonitoringModule } from './monitoring/monitoring.module';
 import { SettingsModule } from './settings/settings.module';
@@ -52,6 +53,7 @@ import { SettingsModule } from './settings/settings.module';
     LeaveModule,
     IntegrationsModule,
     PricingModule,
+    SubscriptionsModule,
     ReportsModule,
     MonitoringModule,
   ],

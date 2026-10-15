@@ -136,7 +136,12 @@ model pricing_master {
   currency       String           @default("USD") @db.VarChar(10)
   recommended    String           @default("N") @db.Char(1)
   features       Json             @default("[]")
+  /// Subscription limits (scripts/add-subscription-columns.sql). NULL max_users = unlimited.
+  max_users       Int?
+  trial_days      Int              @default(0)
+  custom_features Json             @default("[]")
   pricing_detail pricing_detail[]
+  usm_company    usm_company[]
 }
 
 model system_logs {
@@ -192,6 +197,13 @@ model usm_company {
   edit_by                    String?                     @db.VarChar(50)
   edit_date                  DateTime?                   @db.Timestamp(6)
   pid                        String?                     @db.VarChar(2)
+  /// Subscription link (scripts/add-subscription-columns.sql). NULL plan_id = legacy company, no limits.
+  plan_id                    BigInt?
+  plan_status                String?                     @db.VarChar(10)
+  plan_started_at            DateTime?                   @db.Timestamp(6)
+  trial_ends_at              DateTime?                   @db.Timestamp(6)
+  pricing_master             pricing_master?             @relation(fields: [plan_id], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "fk_usm_company_plan")
+  mobile_app_users           mobile_app_users[]
   api_logs                   api_logs[]
   integration_field_mapping  integration_field_mapping[]
   integration_master         integration_master[]
@@ -292,4 +304,16 @@ model platform_settings {
   integration_warnings    String    @default("Y") @db.Char(1)
   edit_by                 String?   @db.VarChar(50)
   edit_date               DateTime? @db.Timestamp(6)
+}
+
+/// One row per HR employee who has connected through the mobile app; a plan's max_users counts these rows.
+model mobile_app_users {
+  company_id           String      @db.VarChar(2)
+  external_employee_id String      @db.VarChar(100)
+  employee_name        String?     @db.VarChar(100)
+  first_seen_at        DateTime    @default(now()) @db.Timestamp(6)
+  last_seen_at         DateTime    @default(now()) @db.Timestamp(6)
+  usm_company          usm_company @relation(fields: [company_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_mobile_app_users_company")
+
+  @@id([company_id, external_employee_id], map: "pk_mobile_app_users")
 }

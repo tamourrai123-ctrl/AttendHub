@@ -19,6 +19,7 @@ import {
   updatePricingPlan,
 } from "../../api/pricing";
 import { ApiError } from "../../api/client";
+import { planHighlights } from "../../lib/planHighlights";
 import { MAX_PRICING_PLANS } from "../../types/pricing";
 import type { CreatePricingPlanInput, PricingPlan } from "../../types/pricing";
 import type { AsyncStatus } from "../../types/common";
@@ -209,8 +210,8 @@ export default function Pricing() {
               </p>
 
               <ul className="mt-4 flex flex-col gap-2">
-                {plan.features.map((feature) => (
-                  <li key={feature} className="flex items-start gap-2 text-sm text-slate-600">
+                {planHighlights(plan).map((feature, i) => (
+                  <li key={`${feature}-${i}`} className="flex items-start gap-2 text-sm text-slate-600">
                     <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
                     {feature}
                   </li>

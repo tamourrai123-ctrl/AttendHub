@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, pricing_master as PricingMasterRow } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
-import { PricingPlan } from '../interfaces/pricing-plan.interface';
+import { PlanCustomFeature, PricingPlan } from '../interfaces/pricing-plan.interface';
 import { CreatePlanDto } from '../dto/create-plan.dto';
 import { UpdatePlanDto } from '../dto/update-plan.dto';
 
@@ -28,6 +28,20 @@ function shortNameFor(name: string): string {
     .replace(/[^A-Z0-9]+/g, '_')
     .replace(/^_+|_+$/g, '');
   return (slug || 'PLAN').slice(0, 50);
+}
+
+/** Defensive read of the custom_features JSONB column: anything that isn't a well-formed {key,label,value} entry is dropped. */
+function toCustomFeatures(raw: unknown): PlanCustomFeature[] {
+  if (!Array.isArray(raw)) return [];
+  const out: PlanCustomFeature[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue;
+    const { key, label, value } = item as Record<string, unknown>;
+    if (typeof key !== 'string' || typeof label !== 'string') continue;
+    if (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean') continue;
+    out.push({ key, label, value });
+  }
+  return out;
 }
 
 /**
@@ -93,6 +107,13 @@ export class PrismaPlansRepository {
     return this.prisma.pricing_master.count();
   }
 
+  /** How many companies are currently on this plan (a plan in use can't be deleted). */
+  async countCompaniesOnPlan(id: string): Promise<number> {
+    const numericId = toBigIntId(id);
+    if (numericId === null) return 0;
+    return this.prisma.usm_company.count({ where: { plan_id: numericId } });
+  }
+
   async clearRecommended(): Promise<void> {
     await this.prisma.pricing_master.updateMany({ data: { recommended: 'N' } });
   }
@@ -111,6 +132,9 @@ export class PrismaPlansRepository {
         recommended: dto.recommended ? 'Y' : 'N',
         status: dto.active ? 'Y' : 'N',
         sort_order: displayOrder,
+        max_users: dto.maxUsers ?? null,
+        trial_days: dto.trialDays ?? 0,
+        custom_features: (dto.customFeatures ?? []) as unknown as Prisma.InputJsonValue,
       },
     });
     return this.toPlan(row);
@@ -130,6 +154,10 @@ export class PrismaPlansRepository {
     if (dto.recommended !== undefined) data.recommended = dto.recommended ? 'Y' : 'N';
     if (dto.active !== undefined) data.status = dto.active ? 'Y' : 'N';
     if (dto.displayOrder !== undefined) data.sort_order = dto.displayOrder;
+    // null is meaningful here: it switches the plan to "unlimited users".
+    if (dto.maxUsers !== undefined) data.max_users = dto.maxUsers;
+    if (dto.trialDays !== undefined) data.trial_days = dto.trialDays;
+    if (dto.customFeatures !== undefined) data.custom_features = dto.customFeatures as unknown as Prisma.InputJsonValue;
 
     try {
       const row = await this.prisma.pricing_master.update({ where: { id: numericId }, data });
@@ -166,6 +194,9 @@ export class PrismaPlansRepository {
       recommended: row.recommended === 'Y',
       displayOrder: row.sort_order,
       active: row.status === 'Y',
+      maxUsers: row.max_users ?? null,
+      trialDays: row.trial_days ?? 0,
+      customFeatures: toCustomFeatures(row.custom_features),
     };
   }
 }

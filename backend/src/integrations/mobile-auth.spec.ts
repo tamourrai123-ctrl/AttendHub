@@ -204,3 +204,26 @@ describe('Login also registers the login session with HR when the app sends its 
     expect(result.token).toBe('test-jwt');
   });
 });
+
+describe('MobileAuthService plan enforcement', () => {
+  it('takes an app-user seat only after HR has verified the employee', async () => {
+    const h = harness(GET_LOGIN);
+    server.handler = () => reply(HR_SAMPLES.login);
+    await h.mobileAuth.login(dto);
+    expect(h.subscriptions.registerMobileUser).toHaveBeenCalledWith('cA', '000008', '');
+  });
+
+  it('does not touch the seat count when the HR login fails', async () => {
+    const h = harness(GET_LOGIN);
+    server.handler = () => reply({ message: 'denied' }, 401);
+    await expect(h.mobileAuth.login(dto)).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(h.subscriptions.registerMobileUser).not.toHaveBeenCalled();
+  });
+
+  it('rejects the login (and issues no session) when the plan has no seat left or the trial ended', async () => {
+    const h = harness(GET_LOGIN);
+    server.handler = () => reply(HR_SAMPLES.login);
+    h.subscriptions.registerMobileUser.mockRejectedValueOnce(new ForbiddenException('limit reached'));
+    await expect(h.mobileAuth.login(dto)).rejects.toBeInstanceOf(ForbiddenException);
+  });
+});

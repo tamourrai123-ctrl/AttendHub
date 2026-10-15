@@ -1,10 +1,11 @@
 import { useState, type FormEvent } from "react";
-import { Navigate, useLocation } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { Mail, ShieldCheck } from "lucide-react";
 import Input from "../../components/ui/Input";
 import PasswordInput from "../../components/ui/PasswordInput";
 import Checkbox from "../../components/ui/Checkbox";
 import Button from "../../components/ui/Button";
+import GoogleSignInButton, { isGoogleSignInEnabled } from "../../components/auth/GoogleSignInButton";
 import { useAuth } from "../../contexts/AuthContext";
 import { useToast } from "../../components/feedback/ToastContext";
 import { brand } from "../../config/brand";
@@ -21,9 +22,10 @@ function isValidEmail(value: string): boolean {
 }
 
 export default function Login() {
-  const { login, isLoggingIn, isAuthenticated, user, error, clearError } = useAuth();
+  const { login, loginWithGoogle, isLoggingIn, isAuthenticated, user, error, clearError } = useAuth();
   const { showToast } = useToast();
   const location = useLocation();
+  const navigate = useNavigate();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -60,6 +62,22 @@ export default function Login() {
       // No explicit navigate() here: once login() updates the auth context,
       // this component re-renders and the isAuthenticated check above
       // redirects to the role's home route (or the page the user came from).
+    } catch {
+      // error state is already surfaced via useAuth().error
+    }
+  };
+
+  const handleGoogleCredential = async (idToken: string) => {
+    clearError();
+    try {
+      const result = await loginWithGoogle(idToken);
+      if (result.status === "SIGNUP_REQUIRED") {
+        navigate("/signup", {
+          state: { google: { signupToken: result.signupToken, email: result.email, name: result.name } },
+        });
+        return;
+      }
+      showToast({ tone: "success", title: "Welcome back", description: "You've signed in successfully." });
     } catch {
       // error state is already surfaced via useAuth().error
     }
@@ -130,8 +148,27 @@ export default function Login() {
               Sign In
             </Button>
           </form>
+
+          {isGoogleSignInEnabled && (
+            <>
+              <div className="my-5 flex items-center gap-3 text-xs text-slate-400" aria-hidden="true">
+                <span className="h-px flex-1 bg-slate-200" />
+                or
+                <span className="h-px flex-1 bg-slate-200" />
+              </div>
+              <GoogleSignInButton onCredential={handleGoogleCredential} disabled={isLoggingIn} />
+            </>
+          )}
+
+          <p className="mt-6 text-center text-sm text-slate-500">
+            New to {brand.name}?{" "}
+            <Link to="/signup" className="font-medium text-brand-600 hover:text-brand-700">
+              Create an account
+            </Link>
+          </p>
         </div>
 
+        {import.meta.env.DEV && (
         <div className="mt-6 rounded-xl border border-slate-200 bg-slate-100/60 p-4">
           <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-slate-500">
             <ShieldCheck className="h-3.5 w-3.5" /> Demo credentials (development only)
@@ -150,6 +187,7 @@ export default function Login() {
             ))}
           </div>
         </div>
+        )}
       </div>
     </div>
   );

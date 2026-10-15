@@ -4,10 +4,12 @@ import {
   LayoutDashboard,
   Users,
   Plug,
+  CreditCard,
   Settings,
 } from "lucide-react";
 import Sidebar from "../components/layout/Sidebar";
 import Topbar from "../components/layout/Topbar";
+import PlanBanner from "../components/layout/PlanBanner";
 import { useAuth } from "../contexts/AuthContext";
 import type { NavItemDefinition } from "../types/common";
 
@@ -15,6 +17,7 @@ const NAV_ITEMS: NavItemDefinition[] = [
   { label: "Dashboard", to: "/company/dashboard", icon: LayoutDashboard },
   { label: "Employees", to: "/company/employees", icon: Users },
   { label: "Integrations", to: "/company/integrations", icon: Plug },
+  { label: "Plan & usage", to: "/company/plan", icon: CreditCard },
 ];
 
 const FOOTER_ITEMS: NavItemDefinition[] = [
@@ -46,6 +49,7 @@ export default function CompanyLayout() {
         settingsHref="/company/settings"
       />
       <main className="p-4 sm:p-6 lg:p-8">
+        <PlanBanner />
         <Outlet />
       </main>
     </div>

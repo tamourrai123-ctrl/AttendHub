@@ -12,22 +12,29 @@ import { AuthenticatedUser } from '../common/interfaces/authenticated-user.inter
 import { Role } from '../common/constants/roles.enum';
 import { SystemLogsService } from '../system-logs/system-logs.service';
 import { SettingsService } from '../settings/settings.service';
+import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 import { InMemoryUsersRepository } from './repositories/in-memory-users.repository';
 import { PrismaUsersRepository } from './repositories/prisma-users.repository';
 import { PrismaSessionsRepository } from './repositories/prisma-sessions.repository';
 import { EmailService } from './email/email.service';
+import { GoogleAuthService } from './google/google-auth.service';
 import { LoginDto } from './dto/login.dto';
 import { SignupDto } from './dto/signup.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
+import { GoogleLoginDto } from './dto/google-login.dto';
+import { GoogleSignupDto } from './dto/google-signup.dto';
 import { hashPassword, verifyPassword } from './utils/password.util';
+import { randomBytes } from 'crypto';
 import { generateRawToken, generateSessionId, hashToken } from './utils/token.util';
 import {
   COMPANY_ID_ALPHABET,
   COMPANY_ID_MAX_ATTEMPTS,
   EMAIL_VERIFY_TTL_MS,
+  GOOGLE_SIGNUP_PURPOSE,
+  GOOGLE_SIGNUP_TTL_SECONDS,
   PASSWORD_RESET_TTL_MS,
 } from './constants/auth.constants';
 
@@ -44,6 +51,25 @@ export interface PublicAuthUser {
 export interface LoginResult {
   token: string;
   user: PublicAuthUser;
+}
+
+/** POST /auth/google: either the user is signed in, or must finish signing up (new email). */
+export type GoogleLoginResult =
+  | ({ status: 'LOGGED_IN' } & LoginResult)
+  | { status: 'SIGNUP_REQUIRED'; signupToken: string; email: string; name: string };
+
+interface NewTenantInput {
+  companyName: string;
+  companyShortname: string;
+  adminName: string;
+  email: string;
+  passwordHash: string;
+  phone?: string;
+  country?: number;
+  planId?: string;
+  /** true for Google sign-ups (Google already verified the email); false sends the usual verification email. */
+  emailVerified: boolean;
+  signedUpVia: 'password' | 'google';
 }
 
 interface SessionSubject {
@@ -87,6 +113,8 @@ export class AuthService {
     private readonly settingsService: SettingsService,
     private readonly jwtService: JwtService,
     private readonly emailService: EmailService,
+    private readonly subscriptionsService: SubscriptionsService,
+    private readonly googleAuthService: GoogleAuthService,
   ) {}
 
   async login(dto: LoginDto): Promise<LoginResult> {
@@ -120,7 +148,11 @@ export class AuthService {
       });
     }
 
-    // Legacy bridge — see class doc comment.
+    // Legacy bridge — see class doc comment. In production the hardcoded demo accounts are retired as soon as a
+    // real Super Admin exists (or never offered when ALLOW_DEMO_ACCOUNTS is not 'true' — see demoAccountsEnabled()).
+    if (!(await this.demoAccountsEnabled())) {
+      throw new UnauthorizedException('Invalid email or password.');
+    }
     const legacyRecord = this.legacyUsersRepository.findByEmail(dto.email);
     if (!legacyRecord || legacyRecord.password !== dto.password) {
       throw new UnauthorizedException('Invalid email or password.');
@@ -141,8 +173,9 @@ export class AuthService {
    * Public self-signup: creates a brand-new usm_company plus its first
    * admin usm_users row (is_admin='Y') in one atomic transaction, then logs
    * the new admin straight in (matching how most SaaS signup flows behave —
-   * email verification is tracked, not gating, in this phase; see the
-   * final report's "decisions requiring approval").
+   * email verification is tracked, not gating, in this phase). When the
+   * signup names a plan, the company is put on it (starting its free trial
+   * if the plan has one).
    */
   async signup(dto: SignupDto): Promise<LoginResult> {
     const existing = await this.usersRepository.findByEmail(dto.email);
@@ -150,10 +183,121 @@ export class AuthService {
       throw new ConflictException('An account with this email already exists.');
     }
 
-    const passwordHash = await hashPassword(dto.password);
-    const rawVerifyToken = generateRawToken();
-    const verifyTokenHash = hashToken(rawVerifyToken);
-    const verifyExpires = new Date(Date.now() + EMAIL_VERIFY_TTL_MS);
+    return this.createTenant({
+      companyName: dto.companyName,
+      companyShortname: dto.companyShortname,
+      adminName: dto.adminName,
+      email: dto.email,
+      passwordHash: await hashPassword(dto.password),
+      phone: dto.phone,
+      country: dto.country,
+      planId: dto.planId,
+      emailVerified: false,
+      signedUpVia: 'password',
+    });
+  }
+
+  /**
+   * "Continue with Google", step 1. A verified Google email that already has
+   * an account signs in; a new email gets a short-lived signupToken and the
+   * frontend then collects the company details + plan (step 2).
+   *
+   * Only Company Admins may use it, plus the Super Admin whose email equals
+   * the SUPER_ADMIN_EMAIL environment variable. Plain employee rows
+   * (synced from HR, which can carry real email addresses) are refused —
+   * employees sign in through the mobile app, and a matching Google account
+   * must never be a way into the portal.
+   */
+  async googleLogin(dto: GoogleLoginDto): Promise<GoogleLoginResult> {
+    const google = await this.googleAuthService.verifyIdToken(dto.idToken);
+    const user = await this.usersRepository.findByEmail(google.email);
+
+    if (!user) {
+      const signupToken = await this.jwtService.signAsync(
+        { purpose: GOOGLE_SIGNUP_PURPOSE, email: google.email, name: google.name },
+        { expiresIn: `${GOOGLE_SIGNUP_TTL_SECONDS}s` },
+      );
+      return { status: 'SIGNUP_REQUIRED', signupToken, email: google.email, name: google.name };
+    }
+
+    if (user.role === Role.SUPER_ADMIN) {
+      const allowedEmail = (process.env.SUPER_ADMIN_EMAIL ?? '').trim().toLowerCase();
+      if (!allowedEmail || allowedEmail !== user.email.trim().toLowerCase()) {
+        throw new ForbiddenException('Google sign-in is not enabled for this account.');
+      }
+    } else if (user.role !== Role.COMPANY_ADMIN) {
+      throw new ForbiddenException('Employees sign in through the mobile app, not the portal.');
+    }
+
+    if (user.accountLocked) {
+      throw new ForbiddenException('This account is locked. Please contact your administrator.');
+    }
+    if (user.companyId && user.companyStatus && user.companyStatus !== 'Y') {
+      throw new ForbiddenException('This company account is not currently active.');
+    }
+
+    if (!user.emailVerified) {
+      const [companyId, userId] = splitUserId(user.userId);
+      await this.usersRepository.markEmailVerified(companyId, userId);
+    }
+
+    const session = await this.issueSession({
+      userId: user.userId,
+      role: user.role,
+      companyId: user.companyId,
+      employeeId: user.employeeId,
+      name: user.name,
+      email: user.email,
+      companyName: user.companyName,
+    });
+    return { status: 'LOGGED_IN', ...session };
+  }
+
+  /**
+   * "Continue with Google", step 2 (new users only): creates the company and
+   * its first Company Admin exactly like POST /auth/signup — but with the
+   * email already verified by Google and no password the user knows (they
+   * can set one later with "forgot password" if they want one).
+   */
+  async googleSignup(dto: GoogleSignupDto): Promise<LoginResult> {
+    let payload: { purpose?: string; email?: string; name?: string };
+    try {
+      payload = await this.jwtService.verifyAsync(dto.signupToken);
+    } catch {
+      throw new BadRequestException('Your Google sign-up session has expired. Please continue with Google again.');
+    }
+    if (payload.purpose !== GOOGLE_SIGNUP_PURPOSE || !payload.email) {
+      throw new BadRequestException('Your Google sign-up session is not valid. Please continue with Google again.');
+    }
+
+    // Covers a double-submit / a second tab finishing the same signup.
+    if (await this.usersRepository.findByEmail(payload.email)) {
+      throw new ConflictException('An account with this email already exists. Please continue with Google to sign in.');
+    }
+
+    const adminName = (dto.adminName?.trim() || payload.name?.trim() || payload.email.split('@')[0]).slice(0, 50);
+    return this.createTenant({
+      companyName: dto.companyName,
+      companyShortname: dto.companyShortname,
+      adminName,
+      email: payload.email,
+      passwordHash: await hashPassword(randomBytes(32).toString('hex')),
+      phone: dto.phone,
+      country: dto.country,
+      planId: dto.planId,
+      emailVerified: true,
+      signedUpVia: 'google',
+    });
+  }
+
+  /** Shared by POST /auth/signup and the Google sign-up: one transaction creating usm_company + its first admin. */
+  private async createTenant(input: NewTenantInput): Promise<LoginResult> {
+    // Validates the plan (exists + active) BEFORE anything is written, and works out the trial dates.
+    const planFields = await this.subscriptionsService.buildSignupAssignment(input.planId);
+
+    const rawVerifyToken = input.emailVerified ? undefined : generateRawToken();
+    const verifyTokenHash = rawVerifyToken ? hashToken(rawVerifyToken) : null;
+    const verifyExpires = rawVerifyToken ? new Date(Date.now() + EMAIL_VERIFY_TTL_MS) : null;
     const now = new Date();
 
     for (let attempt = 0; attempt < COMPANY_ID_MAX_ATTEMPTS; attempt += 1) {
@@ -163,24 +307,25 @@ export class AuthService {
           const createdCompany = await tx.usm_company.create({
             data: {
               id: companyId,
-              title: dto.companyName,
-              shortname: dto.companyShortname,
-              phone: dto.phone,
+              title: input.companyName,
+              shortname: input.companyShortname,
+              phone: input.phone,
               status: 'Y',
-              country: dto.country ?? 1,
+              country: input.country ?? 1,
               add_date: now,
               edit_date: now,
+              ...planFields,
             },
           });
           const createdUser = await tx.usm_users.create({
             data: {
               company_id: createdCompany.id,
-              user_name: dto.adminName,
-              email_address: dto.email,
-              c_password: passwordHash,
+              user_name: input.adminName,
+              email_address: input.email,
+              c_password: input.passwordHash,
               is_admin: 'Y',
               account_locked: 'N',
-              email_verified: 'N',
+              email_verified: input.emailVerified ? 'Y' : 'N',
               email_verify_token_hash: verifyTokenHash,
               email_verify_expires: verifyExpires,
             },
@@ -188,15 +333,17 @@ export class AuthService {
           return { company: createdCompany, user: createdUser };
         });
 
-        await this.emailService.sendVerificationEmail(dto.email, rawVerifyToken);
+        if (rawVerifyToken) {
+          await this.emailService.sendVerificationEmail(input.email, rawVerifyToken);
+        }
 
         this.systemLogsService.record({
-          user: dto.adminName,
+          user: input.adminName,
           action: 'SIGNUP',
           resource: 'Auth',
           resourceId: `${company.id}:${user.user_id}`,
-          description: `${dto.adminName} signed up and created ${company.title}.`,
-          metadata: { companyId: company.id },
+          description: `${input.adminName} signed up${input.signedUpVia === 'google' ? ' with Google' : ''} and created ${company.title}.`,
+          metadata: { companyId: company.id, planId: input.planId ?? null },
         });
 
         return this.issueSession({
@@ -437,6 +584,18 @@ export class AuthService {
     if (!userId.includes(':')) return undefined;
     const [companyId, dbUserId] = splitUserId(userId);
     return this.usersRepository.findByCompanyAndUserId(companyId, dbUserId);
+  }
+
+  /**
+   * The three hardcoded demo accounts (see class doc comment) are always on
+   * outside production. In production they are off unless
+   * ALLOW_DEMO_ACCOUNTS=true — except that, to avoid ever locking the owner
+   * out, they stay available while the database holds no real Super Admin.
+   */
+  private async demoAccountsEnabled(): Promise<boolean> {
+    if (process.env.NODE_ENV !== 'production') return true;
+    if (process.env.ALLOW_DEMO_ACCOUNTS === 'true') return true;
+    return (await this.usersRepository.countSuperAdmins()) === 0;
   }
 
   private async resolveActorName(user: AuthenticatedUser): Promise<string> {

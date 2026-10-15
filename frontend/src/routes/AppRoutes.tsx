@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import ProtectedRoute from "./ProtectedRoute";
 
 import Login from "../pages/auth/Login";
+import Signup from "../pages/auth/Signup";
 import ForgotPassword from "../pages/auth/ForgotPassword";
 import Unauthorized from "../pages/auth/Unauthorized";
 import NotFound from "../pages/NotFound";
@@ -20,6 +21,7 @@ import CompanyDashboard from "../pages/company/Dashboard";
 import Employees from "../pages/company/Employees";
 import CompanyIntegrations from "../pages/company/Integrations";
 import CompanySettings from "../pages/company/Settings";
+import Plan from "../pages/company/Plan";
 
 
 export default function AppRoutes() {
@@ -27,6 +29,7 @@ export default function AppRoutes() {
     <Routes>
       <Route path="/" element={<Navigate to="/login" replace />} />
       <Route path="/login" element={<Login />} />
+      <Route path="/signup" element={<Signup />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/unauthorized" element={<Unauthorized />} />
 
@@ -62,6 +65,7 @@ export default function AppRoutes() {
         <Route path="dashboard" element={<CompanyDashboard />} />
         <Route path="employees" element={<Employees />} />
         <Route path="integrations" element={<CompanyIntegrations />} />
+        <Route path="plan" element={<Plan />} />
         <Route path="settings" element={<CompanySettings />} />
       </Route>
 

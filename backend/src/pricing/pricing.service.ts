@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { SystemLogsService } from '../system-logs/system-logs.service';
 import { PrismaPlansRepository } from './repositories/prisma-plans.repository';
 import { MAX_PRICING_PLANS, PricingPlan } from './interfaces/pricing-plan.interface';
@@ -41,7 +41,24 @@ export class PricingService {
     return plan;
   }
 
+  /** Custom features: unique keys, and each value must be a string, number or boolean. */
+  private validateCustomFeatures(features: CreatePlanDto['customFeatures']): void {
+    if (!features) return;
+    const seen = new Set<string>();
+    for (const feature of features) {
+      if (seen.has(feature.key)) {
+        throw new BadRequestException(`Duplicate custom feature key "${feature.key}".`);
+      }
+      seen.add(feature.key);
+      const t = typeof feature.value;
+      if (t !== 'string' && t !== 'number' && t !== 'boolean') {
+        throw new BadRequestException(`Custom feature "${feature.key}" must have a string, number or boolean value.`);
+      }
+    }
+  }
+
   async create(dto: CreatePlanDto, actorName: string): Promise<PricingPlan> {
+    this.validateCustomFeatures(dto.customFeatures);
     if ((await this.repository.count()) >= MAX_PRICING_PLANS) {
       throw new ConflictException(`A maximum of ${MAX_PRICING_PLANS} pricing plans is allowed.`);
     }
@@ -65,6 +82,7 @@ export class PricingService {
   }
 
   async update(id: string, dto: UpdatePlanDto, actorName: string): Promise<PricingPlan> {
+    this.validateCustomFeatures(dto.customFeatures);
     if (dto.recommended) {
       await this.repository.clearRecommended();
     }
@@ -90,6 +108,13 @@ export class PricingService {
     const plan = await this.repository.findById(id);
     if (!plan) {
       throw new NotFoundException('Pricing plan not found.');
+    }
+
+    const inUse = await this.repository.countCompaniesOnPlan(id);
+    if (inUse > 0) {
+      throw new ConflictException(
+        `${inUse} ${inUse === 1 ? 'company is' : 'companies are'} on this plan. Move them to another plan, or mark this plan inactive instead of deleting it.`,
+      );
     }
 
     await this.repository.remove(id);

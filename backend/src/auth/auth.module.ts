@@ -4,6 +4,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { SystemLogsModule } from '../system-logs/system-logs.module';
 import { SettingsModule } from '../settings/settings.module';
+import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
@@ -12,6 +13,7 @@ import { InMemoryUsersRepository } from './repositories/in-memory-users.reposito
 import { PrismaUsersRepository } from './repositories/prisma-users.repository';
 import { PrismaSessionsRepository } from './repositories/prisma-sessions.repository';
 import { EmailService } from './email/email.service';
+import { GoogleAuthService } from './google/google-auth.service';
 import { SESSION_TTL_SECONDS } from './constants/auth.constants';
 
 /**
@@ -55,6 +57,7 @@ import { SESSION_TTL_SECONDS } from './constants/auth.constants';
   imports: [
     SystemLogsModule,
     SettingsModule,
+    SubscriptionsModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -71,6 +74,7 @@ import { SESSION_TTL_SECONDS } from './constants/auth.constants';
     PrismaUsersRepository,
     PrismaSessionsRepository,
     EmailService,
+    GoogleAuthService,
     { provide: APP_GUARD, useClass: AuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
   ],

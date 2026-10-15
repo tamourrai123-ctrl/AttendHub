@@ -12,3 +12,7 @@ export const PASSWORD_RESET_TTL_MS = 1000 * 60 * 60; // 1 hour
 /** Character set for generated usm_company.id values — see AuthService.generateCompanyId(). Excludes ambiguous-looking characters (0/O, 1/I) since these ids may occasionally be read by a human (support, logs). */
 export const COMPANY_ID_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 export const COMPANY_ID_MAX_ATTEMPTS = 8;
+
+/** Short-lived token handed to a brand-new Google user between POST /auth/google and POST /auth/google/signup. */
+export const GOOGLE_SIGNUP_PURPOSE = 'google_signup';
+export const GOOGLE_SIGNUP_TTL_SECONDS = 15 * 60;

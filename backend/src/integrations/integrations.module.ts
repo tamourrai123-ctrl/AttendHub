@@ -19,6 +19,7 @@ import { EmployeeSyncSchedulerService } from './services/employee-sync-scheduler
 import { AttendancePunchController } from './attendance-punch.controller';
 import { AttendancePunchService } from './attendance-punch.service';
 import { LoginSessionService } from './login-session.service';
+import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
 import { LeaveApplyService } from './leave-apply.service';
 import { QrAttendanceService } from './qr-attendance.service';
 import { MobileAuthController } from './mobile-auth.controller';
@@ -103,7 +104,7 @@ import { HrLookupService } from './hr-lookup.service';
  * original migration report.
  */
 @Module({
-  imports: [SystemLogsModule, AuthModule, CompaniesModule, EmployeesModule, LovModule, SettingsModule],
+  imports: [SystemLogsModule, AuthModule, CompaniesModule, EmployeesModule, LovModule, SettingsModule, SubscriptionsModule],
   controllers: [
     IntegrationsController,
     EndpointsController,

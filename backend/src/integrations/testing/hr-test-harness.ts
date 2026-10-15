@@ -54,6 +54,7 @@ export class HrTestHarness {
   readonly engine = new FieldMappingService();
   readonly lookup: HrLookupService;
   readonly mobileAuth: MobileAuthService;
+  readonly subscriptions: { registerMobileUser: jest.Mock; assertMobileAccess: jest.Mock };
   readonly punch: AttendancePunchService;
   readonly loginSession: LoginSessionService;
   readonly qrAttendance: QrAttendanceService;
@@ -157,6 +158,8 @@ export class HrTestHarness {
     const settingsService = { getSessionTimeoutSeconds: async () => 3600 };
     const jwtService = { signAsync: async () => 'test-jwt' };
     const systemLogsService = { record: this.systemLogRecord };
+    // Plan enforcement is covered by subscriptions.spec.ts; here it is a no-op so HR behaviour is tested in isolation.
+    this.subscriptions = { registerMobileUser: jest.fn(async () => undefined), assertMobileAccess: jest.fn(async () => null) };
 
     this.executor = new IntegrationEndpointExecutorService(
       integrationsRepository as never,
@@ -199,6 +202,7 @@ export class HrTestHarness {
       jwtService as never,
       systemLogsService as never,
       this.loginSession,
+      this.subscriptions as never,
     );
     this.punch = new AttendancePunchService(
       integrationsService as never,

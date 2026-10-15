@@ -12,6 +12,8 @@ import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
+import { GoogleLoginDto } from './dto/google-login.dto';
+import { GoogleSignupDto } from './dto/google-signup.dto';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -44,6 +46,36 @@ export class AuthController {
   @ApiBody({ type: SignupDto })
   async signup(@Body() dto: SignupDto) {
     return ok(await this.authService.signup(dto));
+  }
+
+  @Public()
+  @Post('google')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Continue with Google (step 1): sign in, or start sign-up for a new email.',
+    description:
+      'Send the Google ID token. Returns { status: "LOGGED_IN", token, user } for an existing Company Admin ' +
+      '(or the Super Admin whose email equals SUPER_ADMIN_EMAIL), or { status: "SIGNUP_REQUIRED", signupToken, email, name } ' +
+      'for a new email — the frontend then shows the pricing page and company form and calls POST /auth/google/signup. ' +
+      'The Google-verified email counts as verified.',
+  })
+  @ApiBody({ type: GoogleLoginDto })
+  async google(@Body() dto: GoogleLoginDto) {
+    return ok(await this.authService.googleLogin(dto));
+  }
+
+  @Public()
+  @Post('google/signup')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: 'Continue with Google (step 2): create the company + first Company Admin for a new Google user.',
+    description:
+      'Needs the signupToken from POST /auth/google plus company name, short name and the chosen planId. ' +
+      'A plan with a free trial starts its trial now. Logs the new admin in.',
+  })
+  @ApiBody({ type: GoogleSignupDto })
+  async googleSignup(@Body() dto: GoogleSignupDto) {
+    return ok(await this.authService.googleSignup(dto));
   }
 
   @Post('logout')

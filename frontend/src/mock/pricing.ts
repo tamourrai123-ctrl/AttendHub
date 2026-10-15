@@ -13,6 +13,9 @@ export const MOCK_PRICING_PLANS: PricingPlan[] = [
     recommended: false,
     displayOrder: 1,
     active: true,
+    maxUsers: null,
+    trialDays: 0,
+    customFeatures: [],
   },
   {
     id: "plan_professional",
@@ -31,6 +34,9 @@ export const MOCK_PRICING_PLANS: PricingPlan[] = [
     recommended: true,
     displayOrder: 2,
     active: true,
+    maxUsers: null,
+    trialDays: 0,
+    customFeatures: [],
   },
   {
     id: "plan_enterprise",
@@ -49,5 +55,8 @@ export const MOCK_PRICING_PLANS: PricingPlan[] = [
     recommended: false,
     displayOrder: 3,
     active: true,
+    maxUsers: null,
+    trialDays: 0,
+    customFeatures: [],
   },
 ];

@@ -8,7 +8,17 @@ import {
   type ReactNode,
 } from "react";
 import type { AuthCredentials, Permission, User, UserRole } from "../types/auth";
-import { AuthError, getMe, login as loginRequest, logout as logoutRequest } from "../api/auth";
+import {
+  AuthError,
+  getMe,
+  login as loginRequest,
+  loginWithGoogle as loginWithGoogleRequest,
+  logout as logoutRequest,
+  signup as signupRequest,
+  signupWithGoogle as signupWithGoogleRequest,
+  type GoogleSignupInput,
+  type SignupInput,
+} from "../api/auth";
 import { clearSession, readPersistedSession } from "../api/session";
 import { SESSION_EXPIRED_EVENT } from "../api/client";
 import { roleHasPermission } from "../lib/permissions";
@@ -22,10 +32,24 @@ interface AuthContextValue {
   isLoggingIn: boolean;
   error: string | null;
   login: (credentials: AuthCredentials) => Promise<void>;
+  /** Signs in with a Google ID token. Resolves "SIGNUP_REQUIRED" (with the details to finish signing up) for a new email. */
+  loginWithGoogle: (idToken: string) => Promise<GoogleSignInResult>;
+  /** Creates a company + first admin with email and password, then signs in. */
+  signup: (input: SignupInput) => Promise<void>;
+  /** Finishes a Google sign-up (company details + plan), then signs in. */
+  signupWithGoogle: (input: GoogleSignupInput) => Promise<void>;
   logout: () => Promise<void>;
   clearError: () => void;
   hasRole: (role: UserRole | UserRole[]) => boolean;
   hasPermission: (permission: Permission) => boolean;
+}
+
+export type GoogleSignInResult =
+  | { status: "LOGGED_IN" }
+  | { status: "SIGNUP_REQUIRED"; signupToken: string; email: string; name: string };
+
+function messageFor(err: unknown): string {
+  return err instanceof AuthError ? err.message : "Something went wrong. Please try again.";
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -104,6 +128,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const loginWithGoogle = useCallback(async (idToken: string): Promise<GoogleSignInResult> => {
+    setIsLoggingIn(true);
+    setError(null);
+    try {
+      const outcome = await loginWithGoogleRequest(idToken);
+      if (outcome.status === "LOGGED_IN") {
+        setUser(outcome.session.user);
+        return { status: "LOGGED_IN" };
+      }
+      return outcome;
+    } catch (err) {
+      setError(messageFor(err));
+      throw err;
+    } finally {
+      setIsLoggingIn(false);
+    }
+  }, []);
+
+  const signup = useCallback(async (input: SignupInput) => {
+    setIsLoggingIn(true);
+    setError(null);
+    try {
+      const session = await signupRequest(input);
+      setUser(session.user);
+    } catch (err) {
+      setError(messageFor(err));
+      throw err;
+    } finally {
+      setIsLoggingIn(false);
+    }
+  }, []);
+
+  const signupWithGoogle = useCallback(async (input: GoogleSignupInput) => {
+    setIsLoggingIn(true);
+    setError(null);
+    try {
+      const session = await signupWithGoogleRequest(input);
+      setUser(session.user);
+    } catch (err) {
+      setError(messageFor(err));
+      throw err;
+    } finally {
+      setIsLoggingIn(false);
+    }
+  }, []);
+
   const logout = useCallback(async () => {
     await logoutRequest();
     setUser(null);
@@ -135,12 +205,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isLoggingIn,
       error,
       login,
+      loginWithGoogle,
+      signup,
+      signupWithGoogle,
       logout,
       clearError,
       hasRole,
       hasPermission,
     }),
-    [user, isInitializing, isLoggingIn, error, login, logout, clearError, hasRole, hasPermission]
+    [user, isInitializing, isLoggingIn, error, login, loginWithGoogle, signup, signupWithGoogle, logout, clearError, hasRole, hasPermission]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

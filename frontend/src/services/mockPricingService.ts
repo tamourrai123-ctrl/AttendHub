@@ -73,6 +73,9 @@ export async function createPricingPlan(input: CreatePricingPlanInput): Promise<
     recommended: input.recommended,
     displayOrder: nextOrder,
     active: input.active,
+    maxUsers: input.maxUsers ?? null,
+    trialDays: input.trialDays ?? 0,
+    customFeatures: input.customFeatures ?? [],
   };
 
   plans = input.recommended ? applyExclusiveRecommended(plans, created.id) : [...plans];

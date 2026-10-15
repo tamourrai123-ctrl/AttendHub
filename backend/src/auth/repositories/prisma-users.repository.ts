@@ -65,6 +65,11 @@ export class PrismaUsersRepository {
     return row ? this.toProfile(row) : undefined;
   }
 
+  /** Number of unlocked, real Super Admin accounts in usm_users (used to decide whether the legacy demo logins may be retired). */
+  async countSuperAdmins(): Promise<number> {
+    return this.prisma.usm_users.count({ where: { super_admin: SUPER_ADMIN_FLAG_VALUE, account_locked: { not: LOCKED_FLAG_VALUE } } });
+  }
+
   async findByCompanyAndUserId(companyId: string, userId: string): Promise<AuthUserProfile | undefined> {
     const numericUserId = toBigIntUserId(userId);
     if (numericUserId === null) return undefined;

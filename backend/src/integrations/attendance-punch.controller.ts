@@ -6,6 +6,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../common/interfaces/authenticated-user.interface';
 import { okMessage } from '../common/dto/api-response.dto';
 import { nameFromStatelessUserKey } from './utils/stateless-session.util';
+import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 import { AttendancePunchService } from './attendance-punch.service';
 import { PostAttendancePunchDto } from './dto/post-attendance-punch.dto';
 
@@ -26,7 +27,10 @@ import { PostAttendancePunchDto } from './dto/post-attendance-punch.dto';
 @Controller('attendance')
 @Roles(Role.EMPLOYEE)
 export class AttendancePunchController {
-  constructor(private readonly attendancePunchService: AttendancePunchService) {}
+  constructor(
+    private readonly attendancePunchService: AttendancePunchService,
+    private readonly subscriptionsService: SubscriptionsService,
+  ) {}
 
   @Post('punch')
   @HttpCode(HttpStatus.OK)
@@ -42,6 +46,8 @@ export class AttendancePunchController {
     if (!user.companyId || !user.employeeId) {
       throw new ForbiddenException('This account has no associated employee profile.');
     }
+    // An ended free trial blocks punching (the seat itself was taken at login).
+    await this.subscriptionsService.assertMobileAccess(user.companyId);
     await this.attendancePunchService.postPunch(user.companyId, user.employeeId, dto, nameFromStatelessUserKey(user.userId));
     return okMessage('Attendance recorded.');
   }

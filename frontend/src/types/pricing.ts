@@ -1,11 +1,21 @@
 /**
- * Pricing plans shown on the public Tamotam website. Super Admin manages
- * these from the Control Panel. This shape already matches the real
- * backend exactly — see backend/src/pricing/interfaces/pricing-plan.interface.ts,
- * whose own comment says it mirrors this file.
+ * Pricing plans shown on the public Tamotam website and chosen by companies
+ * at signup. Super Admin manages these from the Control Panel. This shape
+ * matches the real backend exactly — see
+ * backend/src/pricing/interfaces/pricing-plan.interface.ts.
  */
 
 export const MAX_PRICING_PLANS = 5;
+
+/** A Super-Admin-defined extra on a plan. Only shown unless the backend checks its key. */
+export type PlanFeatureValue = string | number | boolean;
+
+export interface PlanCustomFeature {
+  /** Stable machine key, unique within the plan. */
+  key: string;
+  label: string;
+  value: PlanFeatureValue;
+}
 
 export interface PricingPlan {
   id: string;
@@ -21,6 +31,11 @@ export interface PricingPlan {
   displayOrder: number;
   /** Inactive plans are hidden from the public website but keep their configuration. */
   active: boolean;
+  /** Maximum mobile-app users (employees who sign in and mark attendance). null = unlimited. */
+  maxUsers: number | null;
+  /** Free-trial days when a company first picks this plan. 0 = no trial. */
+  trialDays: number;
+  customFeatures: PlanCustomFeature[];
 }
 
 export interface CreatePricingPlanInput {
@@ -32,6 +47,10 @@ export interface CreatePricingPlanInput {
   features: string[];
   recommended: boolean;
   active: boolean;
+  /** Omit or null = unlimited. */
+  maxUsers?: number | null;
+  trialDays?: number;
+  customFeatures?: PlanCustomFeature[];
 }
 
 /**

@@ -29,6 +29,12 @@ function sorted(list: PricingPlan[]): PricingPlan[] {
   return [...list].sort((a, b) => a.displayOrder - b.displayOrder);
 }
 
+/** Public list of ACTIVE plans (no sign-in needed) — what a new company picks from at signup. */
+export async function getPublicPlans(): Promise<PricingPlan[]> {
+  const response = await apiClient.get<ApiSuccessResponse<PricingPlan[]>>("/plans");
+  return sorted(response.data);
+}
+
 export async function getPricingPlans(): Promise<PricingPlan[]> {
   const response = await apiClient.get<ApiSuccessResponse<PricingPlan[]>>("/plans/all");
   return sorted(response.data);

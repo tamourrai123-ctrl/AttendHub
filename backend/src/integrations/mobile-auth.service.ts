@@ -6,6 +6,7 @@ import { PrismaSessionsRepository } from '../auth/repositories/prisma-sessions.r
 import { generateSessionId } from '../auth/utils/token.util';
 import { SettingsService } from '../settings/settings.service';
 import { SystemLogsService } from '../system-logs/system-logs.service';
+import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 import { IntegrationsService } from './integrations.service';
 import { PrismaEndpointsRepository } from './repositories/prisma-endpoints.repository';
 import { PrismaFieldMappingsRepository } from './repositories/prisma-field-mappings.repository';
@@ -70,6 +71,7 @@ export class MobileAuthService {
     private readonly jwtService: JwtService,
     private readonly systemLogsService: SystemLogsService,
     private readonly loginSessionService: LoginSessionService,
+    private readonly subscriptionsService: SubscriptionsService,
   ) {}
 
   async login(dto: MobileLoginDto): Promise<MobileLoginResult> {
@@ -158,6 +160,10 @@ export class MobileAuthService {
     }
     const hrName = typeof mappedRecord?.name === 'string' ? mappedRecord.name.trim() : '';
 
+    // Plan enforcement: an ended free trial blocks the app, and a NEW employee needs a free seat under the plan's
+    // user limit (employees who already hold a seat are never turned away). Runs only after HR has verified them.
+    await this.subscriptionsService.registerMobileUser(company.id, externalId, hrName);
+
     // Stateless: AttendHub stores no employee. The HR system has just verified
     // this person; the session carries only the company and the HR's own id.
     const loginResult = await this.issueSession(company, externalId, hrName);
@@ -207,6 +213,8 @@ export class MobileAuthService {
     if (!user.companyId || !user.employeeId) {
       throw new ForbiddenException('This session has no employee profile.');
     }
+    // A company whose free trial has ended can't keep extending app sessions.
+    await this.subscriptionsService.assertMobileAccess(user.companyId);
     const ttlSeconds = await this.settingsService.getSessionTimeoutSeconds();
     const token = await this.jwtService.signAsync(
       { sub: user.userId, role: Role.EMPLOYEE, companyId: user.companyId, employeeId: user.employeeId, jti: generateSessionId() },

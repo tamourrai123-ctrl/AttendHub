@@ -49,6 +49,16 @@ export class SignupDto {
   @Matches(/^(?=.*[A-Za-z])(?=.*\d).+$/, { message: 'password must contain at least one letter and one digit' })
   password!: string;
 
+  @ApiProperty({
+    required: false,
+    example: '2',
+    description: 'Id of the plan picked on the pricing page (GET /api/plans). A plan with a free trial starts its trial now.',
+  })
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d+$/, { message: 'planId must be a numeric plan id.' })
+  planId?: string;
+
   @ApiProperty({ required: false, example: '+92 300 1234567', description: 'usm_company.phone' })
   @IsOptional()
   @IsString()
