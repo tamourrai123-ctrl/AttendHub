@@ -25,14 +25,16 @@ function getPageNumbers(current: number, totalPages: number): (number | "ellipsi
 }
 
 /**
- * Client-side pagination for Phase 2's mock lists. `page`/`pageSize`/`total`
- * mirror what a real paginated API response would carry, so this component
- * doesn't need to change when server-side pagination arrives later.
+ * Pagination bar for the server-paginated lists. `page`/`pageSize`/`total` are the values the API returned
+ * (meta.page / meta.limit / meta.total). A `page` outside 1..totalPages (e.g. right after the last row of the
+ * last page was deleted) is clamped for display so the "Showing x–y of z" line never reads backwards; the
+ * pages themselves also move back to the last valid page (see each list's load()).
  */
-export default function Pagination({ page, pageSize, total, onPageChange }: PaginationProps) {
+export default function Pagination({ page: requestedPage, pageSize, total, onPageChange }: PaginationProps) {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   if (total === 0) return null;
 
+  const page = Math.min(Math.max(1, requestedPage), totalPages);
   const start = (page - 1) * pageSize + 1;
   const end = Math.min(total, page * pageSize);
 

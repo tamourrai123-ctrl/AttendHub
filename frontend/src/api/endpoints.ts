@@ -17,6 +17,7 @@ import type {
  *   POST   /integrations/:integrationId/endpoints
  *   PATCH  /integrations/:integrationId/endpoints/:endpointId
  *   DELETE /integrations/:integrationId/endpoints/:endpointId
+ *   PATCH  /integrations/:integrationId/endpoints/:endpointId/field-mapping-access  (Super Admin only)
  *   POST   /integrations/:integrationId/endpoints/:endpointId/test
  *
  * companyId is required by every route (composite-key ownership check —
@@ -79,6 +80,21 @@ export async function updateEndpoint(
   const response = await apiClient.patch<ApiSuccessResponse<IntegrationEndpoint>>(
     `/integrations/${encodeURIComponent(integrationId)}/endpoints/${encodeURIComponent(endpointId)}?${query}`,
     input,
+  );
+  return response.data;
+}
+
+/** Super Admin only: shows/hides the custom mapping section on one endpoint of one company (off by default). */
+export async function setFieldMappingAccess(
+  integrationId: string,
+  companyId: string,
+  endpointId: string,
+  enabled: boolean,
+): Promise<IntegrationEndpoint> {
+  const query = new URLSearchParams({ companyId }).toString();
+  const response = await apiClient.patch<ApiSuccessResponse<IntegrationEndpoint>>(
+    `/integrations/${encodeURIComponent(integrationId)}/endpoints/${encodeURIComponent(endpointId)}/field-mapping-access?${query}`,
+    { enabled },
   );
   return response.data;
 }

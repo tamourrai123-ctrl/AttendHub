@@ -155,6 +155,32 @@ export class EndpointsService {
     return updated;
   }
 
+  /** Super Admin only (enforced in the controller): shows or hides the custom field mapping section on this endpoint for its company. */
+  async setFieldMappingAccess(
+    companyId: string,
+    integrationId: string,
+    endpointId: string,
+    enabled: boolean,
+    actorName: string,
+  ): Promise<IntegrationEndpoint> {
+    const existing = await this.findOne(companyId, integrationId, endpointId); // 404s if missing or mismatched integration
+    const updated = await this.repository.setFieldMappingEnabled(companyId, endpointId, enabled);
+    if (!updated) {
+      throw new NotFoundException('Endpoint not found.');
+    }
+
+    this.systemLogsService.record({
+      user: actorName,
+      action: 'INTEGRATION_FIELD_MAPPING_ACCESS_CHANGED',
+      resource: 'IntegrationEndpoint',
+      resourceId: updated.id,
+      description: `${enabled ? 'Enabled' : 'Disabled'} custom field mapping for endpoint "${existing.name}" under integration ${integrationId}.`,
+      metadata: { integrationId, endpointId, companyId, fieldMappingEnabled: enabled },
+    });
+
+    return updated;
+  }
+
   async remove(companyId: string, integrationId: string, endpointId: string, actorName: string): Promise<void> {
     const endpoint = await this.findOne(companyId, integrationId, endpointId); // 404s if missing or mismatched integration
     await this.repository.remove(companyId, endpointId);

@@ -1,5 +1,8 @@
 import { Type } from 'class-transformer';
-import { IsInt, IsOptional, Min } from 'class-validator';
+import { IsInt, IsOptional, Max, Min } from 'class-validator';
+
+/** Largest page size a client may ask for — keeps one request from pulling an entire table. Walk the pages for more. */
+export const MAX_PAGE_LIMIT = 100;
 
 /**
  * Shared query params for any list endpoint. Extend this with
@@ -17,5 +20,6 @@ export class PaginationQueryDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
+  @Max(MAX_PAGE_LIMIT)
   limit?: number = 20;
 }

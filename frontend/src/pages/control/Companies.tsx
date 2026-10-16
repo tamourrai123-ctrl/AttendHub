@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
-import { Building2, Eye, Pencil, Plus, Power, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { lastPageOf } from "../../lib/paginate";
+import { Building2, Eye, Pencil, Power, Trash2 } from "lucide-react";
 import PageHeader from "../../components/ui/PageHeader";
 import Card from "../../components/ui/Card";
 import Table from "../../components/ui/Table";
 import Badge from "../../components/ui/Badge";
-import Button from "../../components/ui/Button";
 import Pagination from "../../components/ui/Pagination";
 import Dropdown from "../../components/ui/Dropdown";
 import ConfirmDialog from "../../components/ui/ConfirmDialog";
@@ -14,7 +14,7 @@ import ErrorState from "../../components/ui/ErrorState";
 import CompanyFormModal from "./companies/CompanyFormModal";
 import CompanyDetailsDrawer from "./companies/CompanyDetailsDrawer";
 import { useToast } from "../../components/feedback/ToastContext";
-import { createCompany, deleteCompany, getCompanies, updateCompany, updateCompanyStatus } from "../../api/companies";
+import { deleteCompany, getCompanies, updateCompany, updateCompanyStatus } from "../../api/companies";
 import { ApiError } from "../../api/client";
 import { formatDate, formatRelativeTime } from "../../lib/format";
 import { COMPANY_STATUS_BADGE, COMPANY_STATUS_LABEL, INTEGRATION_STATUS_BADGE, INTEGRATION_STATUS_LABEL } from "../../lib/statusBadges";
@@ -56,13 +56,25 @@ export default function Companies() {
   const [deleteTarget, setDeleteTarget] = useState<Company | null>(null);
   const [isConfirmLoading, setIsConfirmLoading] = useState(false);
 
+  // Only the newest request may update the screen — a slow earlier page must not overwrite a later one.
+  const requestId = useRef(0);
+
   const load = useCallback(async () => {
+    const id = ++requestId.current;
     setStatus("loading");
     try {
       const data = await getCompanies({ page, limit: PAGE_SIZE });
+      if (id !== requestId.current) return;
+      // The last row of the last page was removed: step back to the last page that still has rows.
+      const lastPage = lastPageOf(data.total, data.limit);
+      if (page > lastPage) {
+        setPage(lastPage);
+        return;
+      }
       setResult(data);
       setStatus("success");
     } catch (err) {
+      if (id !== requestId.current) return;
       setLoadError(errorMessageFor(err, "We couldn't load the company list."));
       setStatus("error");
     }
@@ -71,11 +83,6 @@ export default function Companies() {
   useEffect(() => {
     load();
   }, [load]);
-
-  const openAddModal = () => {
-    setEditingCompany(undefined);
-    setFormModalOpen(true);
-  };
 
   const openEditModal = (company: Company) => {
     setEditingCompany(company);
@@ -88,12 +95,6 @@ export default function Companies() {
       const updated = await updateCompany(editingCompany.id, submission.input);
       showToast({ tone: "success", title: "Company updated", description: `${updated.name} was updated successfully.` });
       setFormModalOpen(false);
-      load();
-    } else {
-      const created = await createCompany(submission.input);
-      showToast({ tone: "success", title: "Company created", description: `${created.name} was added to the platform.` });
-      setFormModalOpen(false);
-      setPage(1);
       load();
     }
   };
@@ -147,11 +148,6 @@ export default function Companies() {
       <PageHeader
         title="Companies"
         description="Manage every company connected to the platform."
-        action={
-          <Button leftIcon={<Plus className="h-4 w-4" />} onClick={openAddModal}>
-            Add Company
-          </Button>
-        }
       />
 
       <Card padded={false}>
@@ -164,8 +160,7 @@ export default function Companies() {
             <EmptyState
               icon={Building2}
               title="No companies found"
-              description="Companies you create will appear here."
-              action={<Button onClick={openAddModal}>Add Company</Button>}
+              description="Companies appear here after they sign up."
             />
           )}
 

@@ -44,4 +44,10 @@ export interface IntegrationEndpoint {
   responseType: EndpointPayloadType;
   sortOrder: number;
   status: EndpointStatus;
+  /**
+   * Super Admin switch (integration_detail.field_mapping_enabled, 'Y'/'N', default 'N'). When true the custom
+   * field mapping section is shown to the Company Admin on this endpoint; when false it is hidden and the
+   * mapping routes refuse writes. Mappings already saved keep being applied either way.
+   */
+  fieldMappingEnabled: boolean;
 }

@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { lastPageOf } from "../../lib/paginate";
 import { FileText } from "lucide-react";
 import PageHeader from "../../components/ui/PageHeader";
 import Card from "../../components/ui/Card";
@@ -44,13 +45,24 @@ export default function SystemLogs() {
   const [loadError, setLoadError] = useState<string | undefined>(undefined);
   const [selected, setSelected] = useState<SystemLogDetail | null>(null);
 
+  // Only the newest request may update the screen — a slow earlier page must not overwrite a later one.
+  const requestId = useRef(0);
+
   const load = useCallback(async () => {
+    const id = ++requestId.current;
     setStatus("loading");
     try {
       const data = await getSystemLogs({ page, limit: PAGE_SIZE });
+      if (id !== requestId.current) return;
+      const lastPage = lastPageOf(data.total, data.limit);
+      if (page > lastPage) {
+        setPage(lastPage);
+        return;
+      }
       setResult(data);
       setStatus("success");
     } catch (err) {
+      if (id !== requestId.current) return;
       setLoadError(errorMessageFor(err, "We couldn't load the system log."));
       setStatus("error");
     }

@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
-import { Plug, Power } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { lastPageOf } from "../../lib/paginate";
+import { Eye, Plug, Power } from "lucide-react";
 import PageHeader from "../../components/ui/PageHeader";
 import Card from "../../components/ui/Card";
 import Table from "../../components/ui/Table";
@@ -11,6 +12,7 @@ import EmptyState from "../../components/ui/EmptyState";
 import LoadingState from "../../components/ui/LoadingState";
 import ErrorState from "../../components/ui/ErrorState";
 import { useToast } from "../../components/feedback/ToastContext";
+import IntegrationDetailDrawer from "./integrations/IntegrationDetailDrawer";
 import { getIntegrations, updateIntegrationStatus } from "../../api/integrations";
 import { ApiError } from "../../api/client";
 import { INTEGRATION_STATUS_BADGE, INTEGRATION_STATUS_LABEL } from "../../lib/statusBadges";
@@ -59,16 +61,28 @@ export default function Integrations() {
   const [result, setResult] = useState<IntegrationListResult | null>(null);
   const [loadError, setLoadError] = useState<string | undefined>(undefined);
 
+  const [viewTarget, setViewTarget] = useState<Integration | null>(null);
   const [deactivateTarget, setDeactivateTarget] = useState<Integration | null>(null);
   const [isConfirmLoading, setIsConfirmLoading] = useState(false);
 
+  // Only the newest request may update the screen — a slow earlier page must not overwrite a later one.
+  const requestId = useRef(0);
+
   const load = useCallback(async () => {
+    const id = ++requestId.current;
     setStatus("loading");
     try {
       const data = await getIntegrations({ page, limit: PAGE_SIZE });
+      if (id !== requestId.current) return;
+      const lastPage = lastPageOf(data.total, data.limit);
+      if (page > lastPage) {
+        setPage(lastPage);
+        return;
+      }
       setResult(data);
       setStatus("success");
     } catch (err) {
+      if (id !== requestId.current) return;
       setLoadError(errorMessageFor(err, "We couldn't load the integrations list."));
       setStatus("error");
     }
@@ -109,7 +123,7 @@ export default function Integrations() {
 
   return (
     <div>
-      <PageHeader title="Integrations" description="View each company's HR system connection and turn it on or off." />
+      <PageHeader title="Integrations" description="View each company's HR system connection, turn it on or off, and switch custom mapping on per endpoint under Details." />
 
       <Card padded={false}>
         <div className="p-4">
@@ -161,7 +175,10 @@ export default function Integrations() {
                   header: "",
                   className: "text-right",
                   render: (row) => (
-                    <div className="flex justify-end">
+                    <div className="flex justify-end gap-2">
+                      <Button variant="secondary" size="sm" leftIcon={<Eye className="h-3.5 w-3.5" />} onClick={() => setViewTarget(row)}>
+                        Details
+                      </Button>
                       <Button
                         variant={row.status === "CONNECTED" ? "secondary" : "primary"}
                         size="sm"
@@ -182,6 +199,8 @@ export default function Integrations() {
           <Pagination page={result.page} pageSize={result.limit} total={result.total} onPageChange={setPage} />
         )}
       </Card>
+
+      <IntegrationDetailDrawer integration={viewTarget} onClose={() => setViewTarget(null)} />
 
       <ConfirmDialog
         isOpen={Boolean(deactivateTarget)}

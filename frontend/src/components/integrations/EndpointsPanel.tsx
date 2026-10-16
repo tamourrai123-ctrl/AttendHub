@@ -562,7 +562,9 @@ export default function EndpointsPanel({ integrationId, companyId }: EndpointsPa
                       </div>
                     )}
 
-                    <FieldMappingEditor integrationId={integrationId} companyId={companyId} endpoint={endpoint} purpose={purpose} />
+                    {endpoint.fieldMappingEnabled === true && (
+                      <FieldMappingEditor integrationId={integrationId} companyId={companyId} endpoint={endpoint} purpose={purpose} />
+                    )}
                   </div>
                 )}
               </div>

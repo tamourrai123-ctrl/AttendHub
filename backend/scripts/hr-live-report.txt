@@ -1,0 +1,39 @@
+HR live check  2026-10-16T18:28:35.282Z
+base: https://erp.ovacsol.com/ords/erp   company: OVACSOL   user: SHAZIL   write tests: off (set HR_WRITE=1 to enable)
+
+=== 1) Company Information
+GET https://erp.ovacsol.com/ords/erp/get_companies/OVACSOL
+RESULT: FAIL  could not connect (fetch failed)
+
+=== 2) Authentication
+GET https://erp.ovacsol.com/ords/erp/get_companies/login/OVACSOL/SHAZIL/***
+RESULT: FAIL  could not connect (fetch failed)
+note: login returned no row, so employee-based checks below use the HR_* overrides if given.
+
+=== 4) Mobile Attendance Report
+GET https://erp.ovacsol.com/ords/erp/get_companies/attendance_report/OVACSOL/SHAZIL
+RESULT: FAIL  could not connect (fetch failed)
+
+=== 5) WiFi Information
+GET https://erp.ovacsol.com/ords/erp/get_companies/fetch_wifi/OVACSOL/Ovacsol%20Ptcl
+RESULT: FAIL  could not connect (fetch failed)
+
+=== 6) Shift Record
+SKIPPED: no employee id (login returned none; set HR_EMPLOYEE_ID)
+
+=== 7) Leave Report
+SKIPPED: no employee id
+
+=== 9) User Token Report (device_info)
+GET https://erp.ovacsol.com/ords/erp/get_companies/device_info/OVACSOL/SHAZIL
+RESULT: FAIL  could not connect (fetch failed)
+
+=== 3) Attendance (POST) and 8) User Tokens (POST)
+SKIPPED: they write real rows into HR. Run again with HR_WRITE=1 to include them.
+
+=== SUMMARY
+FAIL  1) Company Information
+FAIL  2) Authentication
+FAIL  4) Mobile Attendance Report
+FAIL  5) WiFi Information
+FAIL  9) User Token Report (device_info)

@@ -3,10 +3,13 @@ import Drawer from "../../../components/ui/Drawer";
 import Tabs from "../../../components/ui/Tabs";
 import Badge from "../../../components/ui/Badge";
 import LoadingState from "../../../components/ui/LoadingState";
-import { getEndpoints } from "../../../api/endpoints";
+import { getEndpoints, setFieldMappingAccess } from "../../../api/endpoints";
+import { ApiError } from "../../../api/client";
+import { useToast } from "../../../components/feedback/ToastContext";
 import { getFieldMappings } from "../../../api/fieldMappings";
 import { getSystemLogs } from "../../../api/systemLogs";
 import { formatDateTime } from "../../../lib/format";
+import { fetchAllPages, MAX_PAGE_LIMIT } from "../../../lib/paginate";
 import { INTEGRATION_STATUS_BADGE, INTEGRATION_STATUS_LABEL } from "../../../lib/statusBadges";
 import type { Integration } from "../../../types/integration";
 import type { IntegrationEndpoint } from "../../../types/endpoint";
@@ -14,7 +17,8 @@ import type { FieldMappingRecord } from "../../../types/fieldMapping";
 import type { SystemLogDetail } from "../../../types/systemLog";
 
 /**
- * Read-only Super Admin view of one company's REAL integration — data comes
+ * Super Admin view of one company's REAL integration (read-only, except the per-endpoint "Custom mapping" switch on the
+ * Field Mapping tab, which decides whether that endpoint's custom mapping section is shown to the company's admin) — data comes
  * from the same backend routes the Company Admin's own screens use
  * (integrations, endpoints, field mappings, system logs). Super Admin can
  * view these (backend allows SUPER_ADMIN on the GET routes) but cannot edit
@@ -37,12 +41,56 @@ interface EndpointWithMappings {
   mappings: FieldMappingRecord[];
 }
 
+const ACTIVITY_WANTED = 8;
+/** How many pages of the platform-wide system log are scanned for this company's entries (the log has no company filter). */
+const ACTIVITY_MAX_PAGES = 10;
+
+/** The newest system-log entries that belong to this company. Pages through the log until enough are found. */
+async function loadCompanyActivity(integration: Integration): Promise<SystemLogDetail[]> {
+  const found: SystemLogDetail[] = [];
+  for (let page = 1; page <= ACTIVITY_MAX_PAGES && found.length < ACTIVITY_WANTED; page += 1) {
+    const logs = await getSystemLogs({ page, limit: MAX_PAGE_LIMIT });
+    found.push(
+      ...logs.items.filter(
+        (item) => item.metadata?.companyId === integration.companyId || item.description.includes(integration.companyName),
+      ),
+    );
+    if (logs.items.length === 0 || page * logs.limit >= logs.total) break;
+  }
+  return found.slice(0, ACTIVITY_WANTED);
+}
+
 export default function IntegrationDetailDrawer({ integration, onClose }: IntegrationDetailDrawerProps) {
   const [tab, setTab] = useState<string>(TABS[0]);
   const [activity, setActivity] = useState<SystemLogDetail[]>([]);
   const [endpoints, setEndpoints] = useState<EndpointWithMappings[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [loadError, setLoadError] = useState(false);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+  const { showToast } = useToast();
+
+  const handleToggleMapping = async (endpoint: IntegrationEndpoint) => {
+    if (!integration) return;
+    const next = !endpoint.fieldMappingEnabled;
+    setTogglingId(endpoint.id);
+    try {
+      const updated = await setFieldMappingAccess(integration.id, integration.companyId, endpoint.id, next);
+      setEndpoints((prev) => prev.map((item) => (item.endpoint.id === endpoint.id ? { ...item, endpoint: updated } : item)));
+      showToast({
+        tone: "success",
+        title: next ? "Custom mapping turned on" : "Custom mapping turned off",
+        description: `${endpoint.name} for ${integration.companyName}.`,
+      });
+    } catch (err) {
+      showToast({
+        tone: "error",
+        title: "Couldn't change custom mapping",
+        description: err instanceof ApiError ? err.message : "Something went wrong. Please try again.",
+      });
+    } finally {
+      setTogglingId(null);
+    }
+  };
 
   useEffect(() => {
     if (!integration) return;
@@ -53,25 +101,21 @@ export default function IntegrationDetailDrawer({ integration, onClose }: Integr
 
     const load = async () => {
       try {
-        const [logs, endpointResult] = await Promise.all([
-          getSystemLogs({ page: 1, limit: 100 }).catch(() => null),
-          getEndpoints(integration.id, integration.companyId, 1, 100),
+        const [companyLogs, endpointResult] = await Promise.all([
+          loadCompanyActivity(integration).catch(() => [] as SystemLogDetail[]),
+          fetchAllPages((page, limit) => getEndpoints(integration.id, integration.companyId, page, limit)),
         ]);
         const withMappings = await Promise.all(
           endpointResult.items.map(async (endpoint) => {
-            const mappingResult = await getFieldMappings(integration.id, endpoint.id, integration.companyId, 1, 100).catch(() => null);
+            const mappingResult = await fetchAllPages((page, limit) =>
+              getFieldMappings(integration.id, endpoint.id, integration.companyId, page, limit),
+            ).catch(() => null);
             return { endpoint, mappings: mappingResult ? mappingResult.items : [] };
           })
         );
         if (cancelled) return;
         setEndpoints(withMappings);
-        setActivity(
-          logs
-            ? logs.items
-                .filter((item) => item.metadata?.companyId === integration.companyId || item.description.includes(integration.companyName))
-                .slice(0, 8)
-            : []
-        );
+        setActivity(companyLogs);
       } catch {
         if (!cancelled) setLoadError(true);
       } finally {
@@ -89,8 +133,10 @@ export default function IntegrationDetailDrawer({ integration, onClose }: Integr
     return <Drawer isOpen={false} onClose={onClose} title="" widthClassName="max-w-2xl" />;
   }
 
+  const companyName = integration.companyName;
+
   return (
-    <Drawer isOpen={Boolean(integration)} onClose={onClose} title={integration.companyName} description="Integration details (read-only)" widthClassName="max-w-2xl">
+    <Drawer isOpen={Boolean(integration)} onClose={onClose} title={integration.companyName} description="Integration details. Use the Field Mapping tab to switch custom mapping on per endpoint." widthClassName="max-w-2xl">
       <Tabs tabs={TABS} active={tab} onChange={setTab} />
 
       <div className="pt-5">
@@ -167,11 +213,33 @@ export default function IntegrationDetailDrawer({ integration, onClose }: Integr
             ) : (
               endpoints.map(({ endpoint, mappings }) => (
                 <div key={endpoint.id} className="overflow-hidden rounded-lg border border-slate-200">
-                  <div className="flex items-center justify-between bg-slate-50 px-4 py-2">
-                    <span className="text-sm font-medium text-slate-800">{endpoint.name}</span>
-                    <span className="text-xs text-slate-500">
-                      {endpoint.httpMethod} {endpoint.endpoint}
-                    </span>
+                  <div className="flex items-center justify-between gap-3 bg-slate-50 px-4 py-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-slate-800">{endpoint.name}</p>
+                      <p className="break-all text-xs text-slate-500">
+                        {endpoint.httpMethod} {endpoint.endpoint}
+                      </p>
+                    </div>
+                    <label className="flex shrink-0 items-center gap-2 text-xs text-slate-600">
+                      <span>{endpoint.fieldMappingEnabled ? "Custom mapping on" : "Custom mapping off"}</span>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={endpoint.fieldMappingEnabled}
+                        aria-label={`Show custom mapping to ${companyName} for ${endpoint.name}`}
+                        disabled={togglingId === endpoint.id}
+                        onClick={() => handleToggleMapping(endpoint)}
+                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 disabled:opacity-50 ${
+                          endpoint.fieldMappingEnabled ? "bg-brand-600" : "bg-slate-300"
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-4 w-4 rounded-full bg-white transition-transform ${
+                            endpoint.fieldMappingEnabled ? "translate-x-4" : "translate-x-0.5"
+                          }`}
+                        />
+                      </button>
+                    </label>
                   </div>
                   {mappings.length === 0 ? (
                     <p className="px-4 py-3 text-sm text-slate-500">No field mappings.</p>

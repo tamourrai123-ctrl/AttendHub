@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { lastPageOf } from "../../lib/paginate";
 import { Eye, Pencil, Plus, RefreshCw, Trash2, Users, X } from "lucide-react";
 import PageHeader from "../../components/ui/PageHeader";
 import Card from "../../components/ui/Card";
@@ -78,23 +79,36 @@ export default function Employees() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<EmployeeSyncResult | null>(null);
 
-  // Debounce the raw text input so typing doesn't trigger a fetch per keystroke.
+  // Debounce the raw text input so typing doesn't trigger a fetch per keystroke. The page goes back to 1 in the
+  // same update as the new search text, so a search change fetches once (not once with the old page, then again).
   useEffect(() => {
-    const timer = setTimeout(() => setSearch(searchInput), 300);
+    if (searchInput === search) return;
+    const timer = setTimeout(() => {
+      setSearch(searchInput);
+      setPage(1);
+    }, 300);
     return () => clearTimeout(timer);
-  }, [searchInput]);
+  }, [searchInput, search]);
 
-  useEffect(() => {
-    setPage(1);
-  }, [search]);
+  // Only the newest request may update the screen — a slow earlier response must not overwrite a later one.
+  const requestId = useRef(0);
 
   const load = useCallback(async () => {
+    const id = ++requestId.current;
     setStatus("loading");
     try {
       const data = await getEmployees({ search, page, limit: LIMIT });
+      if (id !== requestId.current) return;
+      // The last row of the last page was removed: step back to the last page that still has rows.
+      const lastPage = lastPageOf(data.total, data.limit);
+      if (page > lastPage) {
+        setPage(lastPage);
+        return;
+      }
       setResult(data);
       setStatus("success");
     } catch {
+      if (id !== requestId.current) return;
       setStatus("error");
     }
   }, [search, page]);

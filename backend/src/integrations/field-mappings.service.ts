@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { paginatedResult, PaginatedResult, toSkipTake } from '../common/utils/paginate';
 import { SystemLogsService } from '../system-logs/system-logs.service';
 import { PrismaFieldMappingsRepository } from './repositories/prisma-field-mappings.repository';
@@ -73,6 +73,13 @@ export class FieldMappingsService {
    * is rejected, listing both fixed lists so the admin can see what's
    * actually expected either way.
    */
+  /** Blocks create/update/delete unless the Super Admin has switched custom mapping on for this endpoint (default off). Reads and already-saved mappings are unaffected. */
+  private assertMappingEditingAllowed(endpoint: IntegrationEndpoint): void {
+    if (!endpoint.fieldMappingEnabled) {
+      throw new ForbiddenException('Custom mapping is not enabled for this endpoint. Ask your platform administrator to turn it on.');
+    }
+  }
+
   private assertFieldAllowedForPurpose(endpoint: IntegrationEndpoint, sourcePath: string, targetField: string): void {
     const purpose = findEndpointPurposeByName(endpoint.name);
     if (!purpose) {
@@ -137,6 +144,7 @@ export class FieldMappingsService {
     actorName: string,
   ): Promise<FieldMappingRecord> {
     const endpoint = await this.assertEndpointExists(companyId, integrationId, endpointId);
+    this.assertMappingEditingAllowed(endpoint);
     this.assertFieldAllowedForPurpose(endpoint, dto.sourcePath, dto.targetField);
     const transformType = dto.transformType ?? 'NONE';
     this.fieldMappingEngine.validateTransformConfig(transformType, dto.transformConfig ?? {});
@@ -165,6 +173,7 @@ export class FieldMappingsService {
   ): Promise<FieldMappingRecord> {
     const existing = await this.findOne(companyId, integrationId, endpointId, mappingId); // 404s if missing or mismatched endpoint/integration
     const endpoint = await this.assertEndpointExists(companyId, integrationId, endpointId);
+    this.assertMappingEditingAllowed(endpoint);
     this.assertFieldAllowedForPurpose(endpoint, dto.sourcePath ?? existing.sourcePath, dto.targetField ?? existing.targetField);
 
     const transformType = dto.transformType ?? existing.transformType;
@@ -190,6 +199,7 @@ export class FieldMappingsService {
 
   async remove(companyId: string, integrationId: string, endpointId: string, mappingId: string, actorName: string): Promise<void> {
     const existing = await this.findOne(companyId, integrationId, endpointId, mappingId); // 404s if missing or mismatched endpoint/integration
+    this.assertMappingEditingAllowed(await this.assertEndpointExists(companyId, integrationId, endpointId));
     await this.repository.remove(companyId, mappingId);
 
     this.systemLogsService.record({

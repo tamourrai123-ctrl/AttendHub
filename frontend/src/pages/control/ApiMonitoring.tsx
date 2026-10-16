@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { lastPageOf } from "../../lib/paginate";
 import { Activity, CheckCircle2, Clock, XCircle } from "lucide-react";
 import PageHeader from "../../components/ui/PageHeader";
 import Card from "../../components/ui/Card";
@@ -57,14 +58,25 @@ export default function ApiMonitoring() {
   const [loadError, setLoadError] = useState<string | undefined>(undefined);
   const [selected, setSelected] = useState<ApiLog | null>(null);
 
+  // Only the newest request may update the screen — a slow earlier page must not overwrite a later one.
+  const requestId = useRef(0);
+
   const load = useCallback(async () => {
+    const id = ++requestId.current;
     setStatus("loading");
     try {
       const [logData, summaryData] = await Promise.all([getApiLogs({ page, limit: PAGE_SIZE }), getApiMonitoringSummary()]);
+      if (id !== requestId.current) return;
+      const lastPage = lastPageOf(logData.total, logData.limit);
+      if (page > lastPage) {
+        setPage(lastPage);
+        return;
+      }
       setResult(logData);
       setSummary(summaryData);
       setStatus("success");
     } catch (err) {
+      if (id !== requestId.current) return;
       setLoadError(errorMessageFor(err, "We couldn't load the API request log."));
       setStatus("error");
     }

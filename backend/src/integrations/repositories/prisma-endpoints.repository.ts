@@ -174,6 +174,22 @@ export class PrismaEndpointsRepository {
     }
   }
 
+  /** Super Admin switch: shows ('Y') or hides ('N') the custom field mapping section for the Company Admin on this endpoint. */
+  async setFieldMappingEnabled(companyId: string, id: string, enabled: boolean): Promise<IntegrationEndpoint | undefined> {
+    try {
+      const row = await this.prisma.integration_detail.update({
+        where: { company_id_id: { company_id: companyId, id: toBigIntId(id, 'id') } },
+        data: { field_mapping_enabled: enabled ? 'Y' : 'N', edit_date: new Date() },
+      });
+      return this.toEndpoint(row);
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+        return undefined;
+      }
+      this.handleWriteError(error);
+    }
+  }
+
   async remove(companyId: string, id: string): Promise<boolean> {
     try {
       const endpointId = toBigIntId(id, 'id');
@@ -206,6 +222,7 @@ export class PrismaEndpointsRepository {
       responseType: row.response_type as EndpointPayloadType,
       sortOrder: row.sort_order,
       status: fromStatusCode(row.status),
+      fieldMappingEnabled: row.field_mapping_enabled === 'Y',
     };
   }
 

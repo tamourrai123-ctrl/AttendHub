@@ -22,6 +22,7 @@ import { InMemoryUsersRepository } from '../auth/repositories/in-memory-users.re
 import { EndpointsService } from './endpoints.service';
 import { CreateEndpointDto } from './dto/create-endpoint.dto';
 import { UpdateEndpointDto } from './dto/update-endpoint.dto';
+import { UpdateFieldMappingAccessDto } from './dto/update-field-mapping-access.dto';
 import { TestEndpointDto } from './dto/test-endpoint.dto';
 import { ListEndpointsQueryDto } from './dto/list-endpoints-query.dto';
 
@@ -38,6 +39,7 @@ import { ListEndpointsQueryDto } from './dto/list-endpoints-query.dto';
  * - findAll/findOne: Super Admin + Company Admin. This is Super Admin's
  *   "view" capability — they can see a specific company's endpoints from
  *   their dashboard, but cannot change them.
+ * - field-mapping-access: Super Admin only — the platform switch that lets a company edit an endpoint's field mappings.
  * - create/update/remove/test: Company Admin only. Configuring which
  *   endpoints an integration exposes, and testing them, is day-to-day setup
  *   that belongs entirely to the company that owns the integration; Super
@@ -119,6 +121,29 @@ export class EndpointsController {
   ) {
     const resolvedCompanyId = this.resolveCompanyId(user, companyId);
     return ok(await this.endpointsService.update(resolvedCompanyId, integrationId, endpointId, dto, this.actorName(user)));
+  }
+
+  @Patch(':endpointId/field-mapping-access')
+  @Roles(Role.SUPER_ADMIN)
+  @ApiQuery({ name: 'companyId', required: true })
+  @ApiOperation({
+    summary: "Show or hide the custom field mapping section on this endpoint for its company (Super Admin only).",
+    description:
+      'Off by default. When on, the Company Admin sees and can use the custom field mapping section for this ' +
+      'endpoint. When off it is hidden and mapping create/edit/delete is refused. Mappings that are already saved ' +
+      'keep being applied to HR responses.',
+  })
+  async setFieldMappingAccess(
+    @Param('integrationId') integrationId: string,
+    @Param('endpointId') endpointId: string,
+    @Query('companyId') companyId: string | undefined,
+    @Body() dto: UpdateFieldMappingAccessDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    const resolvedCompanyId = this.resolveCompanyId(user, companyId);
+    return ok(
+      await this.endpointsService.setFieldMappingAccess(resolvedCompanyId, integrationId, endpointId, dto.enabled, this.actorName(user)),
+    );
   }
 
   @Delete(':endpointId')

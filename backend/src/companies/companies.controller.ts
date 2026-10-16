@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, ForbiddenException, Get, HttpCode, HttpStatus, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, ForbiddenException, Get, HttpCode, HttpStatus, Param, Patch, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Role } from '../common/constants/roles.enum';
@@ -8,7 +8,6 @@ import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { ok, okMessage } from '../common/dto/api-response.dto';
 import { InMemoryUsersRepository } from '../auth/repositories/in-memory-users.repository';
 import { CompaniesService } from './companies.service';
-import { CreateCompanyDto } from './dto/create-company.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
 import { UpdateCompanySettingsDto } from './dto/update-company-settings.dto';
 
@@ -77,11 +76,8 @@ export class CompaniesController {
     return ok(await this.companiesService.findOne(id));
   }
 
-  @Post()
-  @ApiOperation({ summary: 'Create a new company (Super Admin only).' })
-  async create(@Body() dto: CreateCompanyDto, @CurrentUser() user: AuthenticatedUser) {
-    return ok(await this.companiesService.create(dto, this.actorName(user)));
-  }
+  // POST /companies is intentionally not exposed: companies are created only
+  // through self-signup (POST /auth/signup or POST /auth/google/signup).
 
   @Patch(':id')
   @ApiOperation({ summary: 'Update a company (Super Admin only).' })

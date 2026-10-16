@@ -70,6 +70,7 @@ model integration_detail {
   edit_by                   String?                     @db.VarChar(50)
   edit_date                 DateTime?                   @db.Timestamp(6)
   company_id                String                      @db.VarChar(2)
+  field_mapping_enabled     String                      @default("N") @db.Char(1)
   integration_master        integration_master          @relation(fields: [company_id, integration_id], references: [company_id, id], onDelete: NoAction, onUpdate: NoAction, map: "fk_id_id")
   integration_field_mapping integration_field_mapping[]
 

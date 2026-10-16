@@ -14,6 +14,7 @@ import { getApiMonitoringSummary } from "../../api/monitoring";
 import { getSystemLogs } from "../../api/systemLogs";
 import { apiClient } from "../../api/client";
 import { formatNumber, formatRelativeTime } from "../../lib/format";
+import { fetchAllPages } from "../../lib/paginate";
 // Everything here is real: Companies/Integrations/API Monitoring/System Logs share
 // the same backend endpoints their own screens use, and Platform Health is a
 // live GET /health call.
@@ -64,8 +65,9 @@ export default function ControlDashboard() {
     setStatus("loading");
     try {
       const [companyResult, integrationResult, apiSummary, logResult, apiUp] = await Promise.all([
-        getCompanies({ page: 1, limit: 1000 }),
-        getIntegrations({ page: 1, limit: 500 }),
+        // The backend caps a page at 100 rows, so walk the pages to count every company/integration.
+        fetchAllPages((page, limit) => getCompanies({ page, limit })),
+        fetchAllPages((page, limit) => getIntegrations({ page, limit })),
         getApiMonitoringSummary(),
         getSystemLogs({ page: 1, limit: 5 }),
         checkApiUp(),
