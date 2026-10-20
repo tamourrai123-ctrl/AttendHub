@@ -13,6 +13,7 @@ import { CreateEndpointDto } from './dto/create-endpoint.dto';
 import { UpdateEndpointDto } from './dto/update-endpoint.dto';
 import { hrBodyReportsFailure } from './utils/hr-failure-body.util';
 import { findEndpointPurposeByName } from './constants/endpoint-purposes.constant';
+import { defaultPathParams } from './utils/default-path-params.util';
 
 /** How many elements of an array are kept in a test response's sample body — the full array may be arbitrarily large and this is only shown for the admin to eyeball while configuring a mapping. */
 const MAX_SAMPLE_ARRAY_ELEMENTS = 5;
@@ -217,7 +218,8 @@ export class EndpointsService {
     const endpoint = await this.findOne(companyId, integrationId, endpointId); // 404s if missing or mismatched integration
 
     // The company's own short name fills {{shortname}} / :p_shortname by itself, exactly like a real mobile call does.
-    const params: Record<string, string> = { ...(queryParams ?? {}) };
+    // `date` (and any future default) is pre-filled with today unless the tester typed one.
+    const params: Record<string, string> = { ...defaultPathParams(), ...(queryParams ?? {}) };
     if (!params.shortname && this.companiesRepository) {
       const company = await this.companiesRepository.findById(companyId);
       if (company?.shortname) params.shortname = company.shortname;

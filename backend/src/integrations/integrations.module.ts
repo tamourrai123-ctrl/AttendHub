@@ -35,6 +35,7 @@ import { IntegrationEndpointExecutorService } from './services/integration-endpo
 import { ResponseFieldDetectorService } from './services/response-field-detector.service';
 import { FieldMappingService } from './services/field-mapping.service';
 import { HrLiveFetchService } from './services/hr-live-fetch.service';
+import { HrCustomService } from './services/hr-custom.service';
 import { HrLookupController } from './hr-lookup.controller';
 import { HrLookupService } from './hr-lookup.service';
 
@@ -138,6 +139,7 @@ import { HrLookupService } from './hr-lookup.service';
     ResponseFieldDetectorService,
     FieldMappingService,
     HrLiveFetchService,
+    HrCustomService,
     HrLookupService,
   ],
   exports: [PrismaIntegrationsRepository, HrLiveFetchService],

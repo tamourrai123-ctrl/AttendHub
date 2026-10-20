@@ -1,4 +1,4 @@
-import { Body, Controller, ForbiddenException, Get, HttpCode, HttpStatus, Post } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, Get, HttpCode, HttpStatus, Param, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Role } from '../common/constants/roles.enum';
@@ -14,6 +14,7 @@ import { PostLeaveApplicationDto } from './dto/post-leave-application.dto';
 import { LeaveApplyService } from './leave-apply.service';
 import { nameFromStatelessUserKey } from './utils/stateless-session.util';
 import { HrDeviceInfoLookupDto } from './dto/hr-device-info-lookup.dto';
+import { HrCustomService } from './services/hr-custom.service';
 
 /**
  * Mobile-app-facing live lookups, forwarded to the caller's own company's HR
@@ -29,6 +30,7 @@ export class HrLookupController {
     private readonly loginSessionService: LoginSessionService,
     private readonly qrAttendanceService: QrAttendanceService,
     private readonly leaveApplyService: LeaveApplyService,
+    private readonly hrCustomService: HrCustomService,
   ) {}
 
   @Get('company-info')
@@ -155,6 +157,39 @@ export class HrLookupController {
   })
   async generateQrToken(@CurrentUser() user: AuthenticatedUser) {
     return ok(await this.qrAttendanceService.generate(this.requireCompany(user)));
+  }
+
+  @Get('custom')
+  @Roles(Role.EMPLOYEE, Role.COMPANY_ADMIN)
+  @ApiOperation({ summary: 'Custom endpoints your company set up that this account may call, with the inputs each one needs.' })
+  async customList(@CurrentUser() user: AuthenticatedUser) {
+    return ok(await this.hrCustomService.list(this.customCaller(user)));
+  }
+
+  @Get('custom/:endpointName')
+  @Roles(Role.EMPLOYEE, Role.COMPANY_ADMIN)
+  @ApiOperation({
+    summary: 'Call a custom GET endpoint by name.',
+    description:
+      'Every path placeholder the endpoint needs is read from the query string (e.g. ?date=20-OCT-2026). shortname is filled from your company; date defaults to today (DD-MON-YYYY). The reply goes through the endpoint\'s field mappings.',
+  })
+  async customGet(@CurrentUser() user: AuthenticatedUser, @Param('endpointName') endpointName: string, @Query() query: Record<string, unknown>) {
+    return ok(await this.hrCustomService.call(this.customCaller(user), endpointName, query ?? {}, 'GET'));
+  }
+
+  @Post('custom/:endpointName')
+  @HttpCode(HttpStatus.OK)
+  @Roles(Role.EMPLOYEE, Role.COMPANY_ADMIN)
+  @ApiOperation({
+    summary: 'Call a custom POST endpoint by name.',
+    description: 'Body: { "params": { ...path placeholders }, "data": { ...record to send, in AttendHub field names } }. The record is sent through the endpoint\'s field mappings.',
+  })
+  async customPost(@CurrentUser() user: AuthenticatedUser, @Param('endpointName') endpointName: string, @Body() body: Record<string, unknown>) {
+    return ok(await this.hrCustomService.call(this.customCaller(user), endpointName, body ?? {}, 'POST'));
+  }
+
+  private customCaller(user: AuthenticatedUser) {
+    return { companyId: this.requireCompany(user), role: user.role, employeeId: user.employeeId, name: nameFromStatelessUserKey(user.userId) || undefined };
   }
 
   private requireCompany(user: AuthenticatedUser): string {

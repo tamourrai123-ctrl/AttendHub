@@ -17,9 +17,10 @@ import { getFieldMappings } from "../../api/fieldMappings";
 import { previewFieldMapping, toPreviewMapping } from "../../api/integrationTools";
 import { ApiError } from "../../api/client";
 import FieldMappingEditor from "./FieldMappingEditor";
-import { PARAM_LABELS, pathParamNames } from "./pathPlaceholders";
+import { defaultParamValue, labelForParam, pathParamNames } from "./pathPlaceholders";
 import type {
   EndpointDirection,
+  EndpointCallableBy,
   EndpointPayloadType,
   EndpointPurpose,
   IntegrationEndpoint,
@@ -46,6 +47,7 @@ interface EndpointFormState {
   requestType: EndpointPayloadType;
   responseType: EndpointPayloadType;
   sortOrder: string;
+  callableBy: EndpointCallableBy;
 }
 
 function emptyForm(direction: EndpointDirection): EndpointFormState {
@@ -58,6 +60,7 @@ function emptyForm(direction: EndpointDirection): EndpointFormState {
     requestType: "JSON",
     responseType: "JSON",
     sortOrder: "1",
+    callableBy: "ADMIN",
   };
 }
 
@@ -144,6 +147,7 @@ export default function EndpointsPanel({ integrationId, companyId }: EndpointsPa
       requestType: endpoint.requestType,
       responseType: endpoint.responseType,
       sortOrder: String(endpoint.sortOrder ?? 1),
+      callableBy: endpoint.callableBy ?? "ADMIN",
     });
     setFormError(undefined);
     setIsModalOpen(true);
@@ -182,6 +186,7 @@ export default function EndpointsPanel({ integrationId, companyId }: EndpointsPa
       requestType: form.requestType,
       responseType: form.responseType,
       sortOrder: Number.isFinite(sortOrder) && sortOrder > 0 ? sortOrder : 1,
+      ...(form.purposeName === CUSTOM_PURPOSE_VALUE && { callableBy: form.callableBy }),
     };
 
     setIsSaving(true);
@@ -237,10 +242,12 @@ export default function EndpointsPanel({ integrationId, companyId }: EndpointsPa
     setExpandedId(endpoint.id);
     // {{shortname}} is filled by the hub itself; anything else (employee id, username, ...) is typed in the boxes below.
     const needed = pathParamNames(endpoint.endpoint).filter((name) => name !== "shortname");
-    const given = testParams[endpoint.id] ?? {};
+    const typed = testParams[endpoint.id] ?? {};
+    const given: Record<string, string> = {};
+    for (const name of needed) given[name] = typed[name]?.trim() ? typed[name] : defaultParamValue(name);
     const missing = needed.filter((name) => !given[name]?.trim());
     if (missing.length > 0) {
-      setTestErrors((prev) => ({ ...prev, [endpoint.id]: `Fill in ${missing.map((name) => PARAM_LABELS[name] ?? name).join(", ")} below, then press Test again.` }));
+      setTestErrors((prev) => ({ ...prev, [endpoint.id]: `Fill in ${missing.map((name) => labelForParam(name)).join(", ")} below, then press Test again.` }));
       return;
     }
     setTestingId(endpoint.id);
@@ -435,9 +442,9 @@ export default function EndpointsPanel({ integrationId, companyId }: EndpointsPa
                               .map((name) => (
                                 <Input
                                   key={name}
-                                  label={PARAM_LABELS[name] ?? name}
+                                  label={labelForParam(name)}
                                   type={name === "password" ? "password" : "text"}
-                                  value={testParams[endpoint.id]?.[name] ?? ""}
+                                  value={testParams[endpoint.id]?.[name] ?? defaultParamValue(name)}
                                   onChange={(e) =>
                                     setTestParams((prev) => ({ ...prev, [endpoint.id]: { ...(prev[endpoint.id] ?? {}), [name]: e.target.value } }))
                                   }
@@ -692,6 +699,23 @@ export default function EndpointsPanel({ integrationId, companyId }: EndpointsPa
             value={form.sortOrder}
             onChange={(e) => setForm({ ...form, sortOrder: e.target.value })}
           />
+
+          {form.purposeName === CUSTOM_PURPOSE_VALUE && (
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-slate-700">Who can call this from the app</label>
+              <select
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+                value={form.callableBy}
+                onChange={(e) => setForm({ ...form, callableBy: e.target.value as EndpointCallableBy })}
+              >
+                <option value="ADMIN">Company Admin only</option>
+                <option value="ALL">Admin and Employees</option>
+              </select>
+              <p className="mt-1.5 text-xs text-slate-500">
+                The app calls it at /hr/custom/{form.name.trim() || "name"}. Employees can only use it when you pick "Admin and Employees".
+              </p>
+            </div>
+          )}
 
           {formError && <p className="text-sm text-red-600">{formError}</p>}
         </div>

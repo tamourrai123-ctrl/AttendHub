@@ -10,6 +10,7 @@ import {
 import Sidebar from "../components/layout/Sidebar";
 import Topbar from "../components/layout/Topbar";
 import PlanBanner from "../components/layout/PlanBanner";
+import ScreenGuide from "../components/layout/ScreenGuide";
 import { useAuth } from "../contexts/AuthContext";
 import type { NavItemDefinition } from "../types/common";
 
@@ -50,6 +51,7 @@ export default function CompanyLayout() {
       />
       <main className="p-4 sm:p-6 lg:p-8">
         <PlanBanner />
+        <ScreenGuide />
         <Outlet />
       </main>
     </div>

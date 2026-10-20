@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import Sidebar from "../components/layout/Sidebar";
 import Topbar from "../components/layout/Topbar";
+import ScreenGuide from "../components/layout/ScreenGuide";
 import type { NavItemDefinition } from "../types/common";
 
 const NAV_ITEMS: NavItemDefinition[] = [
@@ -50,6 +51,7 @@ export default function ControlLayout() {
         settingsHref="/control/settings"
       />
       <main className="p-4 sm:p-6 lg:p-8">
+        <ScreenGuide />
         <Outlet />
       </main>
     </div>

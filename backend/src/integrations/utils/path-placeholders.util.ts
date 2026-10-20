@@ -12,9 +12,22 @@ const COLON_PARAM_ALIASES: Record<string, string> = {
   bssid: 'wifiName',
 };
 
-/** ":p_short_name" -> "shortname", ":p_employee_id" -> "employeeId"; undefined for a colon word the hub does not know. */
+/**
+ * ":p_short_name" -> "shortname", ":p_employee_id" -> "employeeId" (known names), and any other ":p_something" ->
+ * its camelCase form (":p_date" -> "date", ":p_from_date" -> "fromDate"). A bare colon word that does not start with
+ * "p_" and is not a known name is not a placeholder (undefined).
+ */
 export function colonParamName(raw: string): string | undefined {
-  return COLON_PARAM_ALIASES[raw.replace(/^p_/i, '').replace(/_/g, '').toLowerCase()];
+  const known = COLON_PARAM_ALIASES[raw.replace(/^p_/i, '').replace(/_/g, '').toLowerCase()];
+  if (known) return known;
+  if (!/^p_/i.test(raw)) return undefined;
+  const parts = raw
+    .slice(2)
+    .split('_')
+    .filter(Boolean)
+    .map((part) => part.toLowerCase());
+  if (parts.length === 0) return undefined;
+  return parts[0] + parts.slice(1).map((part) => part[0].toUpperCase() + part.slice(1)).join('');
 }
 
 /** Replaces "{{name}}" and ":p_name" placeholders with the (URL-encoded) values supplied; unknown or unsupplied ones stay as written. */

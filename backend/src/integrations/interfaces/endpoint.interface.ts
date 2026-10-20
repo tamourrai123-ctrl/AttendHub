@@ -12,6 +12,9 @@
  */
 export type EndpointHttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 export type EndpointPayloadType = 'JSON' | 'XML' | 'FORM';
+/** Who may call a custom endpoint through the app routes (/hr/custom/...): the company admin only, or admin and employees. */
+export type EndpointCallableBy = 'ADMIN' | 'ALL';
+
 export type EndpointStatus = 'ACTIVE' | 'INACTIVE';
 
 /**
@@ -50,4 +53,6 @@ export interface IntegrationEndpoint {
    * mapping routes refuse writes. Mappings already saved keep being applied either way.
    */
   fieldMappingEnabled: boolean;
+  /** integration_detail.callable_by ('A' = ADMIN, default; 'E' = ALL). Only used by custom (non-reserved) endpoints. */
+  callableBy: EndpointCallableBy;
 }

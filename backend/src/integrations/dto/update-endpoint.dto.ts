@@ -52,4 +52,9 @@ export class UpdateEndpointDto {
   @IsOptional()
   @IsIn(STATUSES)
   status?: EndpointStatus;
+
+  @ApiProperty({ required: false, enum: ['ADMIN', 'ALL'], description: 'Custom endpoints only: who may call it from the app. ADMIN (default) = company admin only; ALL = admin and employees.' })
+  @IsOptional()
+  @IsIn(['ADMIN', 'ALL'])
+  callableBy?: 'ADMIN' | 'ALL';
 }

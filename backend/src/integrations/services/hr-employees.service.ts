@@ -98,7 +98,7 @@ export class HrEmployeesService {
       );
     }
 
-    const result = await this.executor.execute(companyId, integrationId, endpoint.id, queryParams);
+    const result = await this.executor.execute(companyId, integrationId, endpoint.id, queryParams, undefined, { allPages: true });
     if (!result.success) {
       throw new BadRequestException(result.error ?? `The HR system returned an unsuccessful response (HTTP ${result.statusCode}).`);
     }

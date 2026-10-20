@@ -1,10 +1,12 @@
-import { Bell, ChevronDown, LogOut, Menu, Settings, User as UserIcon } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { BookOpen, Bell, ChevronDown, HelpCircle, LogOut, Menu, Settings, User as UserIcon } from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
 import Avatar from "../ui/Avatar";
 import Dropdown from "../ui/Dropdown";
 import { useAuth } from "../../contexts/AuthContext";
 import { useToast } from "../feedback/ToastContext";
 import { ROLE_LABELS } from "../../lib/permissions";
+import { useGuidePrefs } from "../../lib/guidePrefs";
+import { guideForPath } from "../../lib/screenGuides";
 
 interface TopbarProps {
   title: string;
@@ -18,6 +20,9 @@ export default function Topbar({ title, subtitle, onOpenMobileMenu, profileHref,
   const { user, logout } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const guides = useGuidePrefs();
+  const hasGuide = Boolean(guideForPath(pathname));
 
   if (!user) return null;
 
@@ -42,6 +47,18 @@ export default function Topbar({ title, subtitle, onOpenMobileMenu, profileHref,
         <h1 className="truncate text-sm font-semibold text-slate-900 sm:text-base">{title}</h1>
         {subtitle && <p className="truncate text-xs text-slate-500">{subtitle}</p>}
       </div>
+
+      {hasGuide && (
+        <button
+          type="button"
+          onClick={() => guides.reopen(pathname)}
+          aria-label="Show the guide for this screen"
+          title="Guide for this screen"
+          className="rounded-full p-2 text-slate-500 hover:bg-slate-100"
+        >
+          <HelpCircle className="h-5 w-5" />
+        </button>
+      )}
 
       <button
         type="button"
@@ -71,6 +88,9 @@ export default function Topbar({ title, subtitle, onOpenMobileMenu, profileHref,
           ...(settingsHref
             ? [{ label: "Settings", icon: <Settings className="h-4 w-4" />, onSelect: () => navigate(settingsHref) }]
             : []),
+          guides.enabled
+            ? { label: "Turn off screen guides", icon: <BookOpen className="h-4 w-4" />, onSelect: () => guides.setEnabled(false) }
+            : { label: "Turn on screen guides", icon: <BookOpen className="h-4 w-4" />, onSelect: () => guides.setEnabled(true) },
           { label: "Log out", icon: <LogOut className="h-4 w-4" />, onSelect: handleLogout, danger: true },
         ]}
       />

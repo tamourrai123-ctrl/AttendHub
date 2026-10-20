@@ -97,3 +97,18 @@ describe('every path written in the HR API document resolves completely', () => 
     expect(fillPathPlaceholders(path, ALL)).not.toMatch(/:/);
   });
 });
+
+describe('generic :p_ placeholders', () => {
+  const { fillPathPlaceholders, pathParamNames, colonParamName } = require('./utils/path-placeholders.util');
+  it('maps any :p_ word to camelCase', () => {
+    expect(colonParamName('p_date')).toBe('date');
+    expect(colonParamName('p_from_date')).toBe('fromDate');
+    expect(colonParamName('p_shortname')).toBe('shortname');
+    expect(colonParamName('date')).toBeUndefined();
+  });
+  it('fills and lists them', () => {
+    const path = '/ceo/:p_shortname/:p_date';
+    expect(pathParamNames(path)).toEqual(['shortname', 'date']);
+    expect(fillPathPlaceholders(path, { shortname: 'ovac', date: '20-OCT-2026' })).toBe('/ceo/ovac/20-OCT-2026');
+  });
+});

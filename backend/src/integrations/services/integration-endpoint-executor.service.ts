@@ -36,6 +36,9 @@ export interface ConnectionTestResult {
 }
 
 const REQUEST_TIMEOUT_MS = 15_000;
+/** When a GET asks for every page (Oracle ORDS answers 25 rows at a time), stop after this many pages or this much time. */
+const MAX_PAGES = 40;
+const PAGING_BUDGET_MS = 20_000;
 
 /**
  * Controller -> Service -> Repository -> Gateway/Executor -> External API,
@@ -82,6 +85,7 @@ export class IntegrationEndpointExecutorService {
     endpointId: string,
     queryParams: Record<string, string> = {},
     requestBody?: unknown,
+    options?: { allPages?: boolean },
   ): Promise<ExecutionResult> {
     const credentials = await this.integrationsRepository.findCredentialsForExecution(companyId, integrationId);
     if (!credentials) {
@@ -148,6 +152,17 @@ export class IntegrationEndpointExecutorService {
 
       const durationMs = Date.now() - startedAt;
       const body = await this.readBody(response);
+
+      if (options?.allPages && endpoint.httpMethod === 'GET' && response.ok) {
+        const merged = await this.followPages(body, credentials.baseUrl, authHeaders, startedAt);
+        return {
+          success: merged.error === undefined,
+          statusCode: response.status,
+          durationMs: Date.now() - startedAt,
+          body: merged.body,
+          ...(merged.error !== undefined && { error: merged.error }),
+        };
+      }
 
       return { success: response.ok, statusCode: response.status, durationMs, body };
     } catch (error) {
@@ -241,6 +256,70 @@ export class IntegrationEndpointExecutorService {
         error: timedOut ? 'The external API did not respond in time.' : 'Could not reach the external API.',
       };
     }
+  }
+
+  /**
+   * Oracle ORDS answers `{ items: [...25 rows], hasMore, next: { $ref } }` (or `links: [{ rel: 'next', href }]`).
+   * Follows those links and returns ONE body holding every row, so callers never see just the first page. A body
+   * that is not in that shape is returned untouched. Only links under the integration's own base URL are followed.
+   */
+  private async followPages(first: unknown, baseUrl: string, authHeaders: Record<string, string>, startedAt: number): Promise<{ body: unknown; error?: string }> {
+    const firstPage = first as Record<string, unknown> | null;
+    if (!firstPage || typeof firstPage !== 'object' || !Array.isArray(firstPage.items)) {
+      return { body: first };
+    }
+    const items: unknown[] = [...(firstPage.items as unknown[])];
+    const prefix = `${baseUrl.replace(/\/+$/, '')}/`;
+    let next = this.nextLink(firstPage);
+    let pages = 1;
+
+    while (next) {
+      if (!next.startsWith(prefix)) {
+        return { body: first, error: 'The HR system sent a next-page link that points somewhere else, so it was not followed.' };
+      }
+      if (pages >= MAX_PAGES || Date.now() - startedAt > PAGING_BUDGET_MS) {
+        this.logger.warn(`Stopped following HR pages after ${pages} page(s) (${items.length} rows).`);
+        break;
+      }
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+      let page: unknown;
+      try {
+        const response = await fetch(next, {
+          method: 'GET',
+          headers: { Accept: 'application/json', 'User-Agent': 'AttendHub-Gateway/1.0', ...authHeaders },
+          signal: controller.signal,
+        });
+        if (!response.ok) {
+          return { body: first, error: `The HR system answered HTTP ${response.status} while loading page ${pages + 1}.` };
+        }
+        page = await this.readBody(response);
+      } catch {
+        return { body: first, error: `Could not load page ${pages + 1} from the HR system.` };
+      } finally {
+        clearTimeout(timeout);
+      }
+      const record = page as Record<string, unknown> | null;
+      if (!record || typeof record !== 'object' || !Array.isArray(record.items)) break;
+      items.push(...(record.items as unknown[]));
+      pages += 1;
+      next = this.nextLink(record);
+    }
+
+    const merged: Record<string, unknown> = { ...firstPage, items, hasMore: false, count: items.length };
+    delete merged.next;
+    delete merged.links;
+    return { body: merged };
+  }
+
+  private nextLink(page: Record<string, unknown>): string | undefined {
+    const next = page.next as { $ref?: unknown } | undefined;
+    if (next && typeof next.$ref === 'string') return next.$ref;
+    if (Array.isArray(page.links)) {
+      const link = (page.links as Array<{ rel?: unknown; href?: unknown }>).find((l) => l?.rel === 'next');
+      if (link && typeof link.href === 'string') return link.href;
+    }
+    return undefined;
   }
 
   private async readBody(response: Response): Promise<unknown> {

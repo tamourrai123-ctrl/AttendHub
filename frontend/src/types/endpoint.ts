@@ -5,6 +5,8 @@
  */
 export type EndpointHttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 export type EndpointPayloadType = "JSON" | "XML" | "FORM";
+/** Custom endpoints only: who may call them from the app. */
+export type EndpointCallableBy = "ADMIN" | "ALL";
 export type EndpointStatus = "ACTIVE" | "INACTIVE";
 
 /**
@@ -30,6 +32,7 @@ export interface IntegrationEndpoint {
   status: EndpointStatus;
   /** Super Admin switch, off by default. When true the Company Admin sees the custom field mapping section on this endpoint; saved mappings apply either way. */
   fieldMappingEnabled: boolean;
+  callableBy: EndpointCallableBy;
 }
 
 export interface CreateEndpointInput {
@@ -40,6 +43,7 @@ export interface CreateEndpointInput {
   requestType: EndpointPayloadType;
   responseType: EndpointPayloadType;
   sortOrder?: number;
+  callableBy?: EndpointCallableBy;
 }
 
 export interface UpdateEndpointInput {
@@ -50,6 +54,7 @@ export interface UpdateEndpointInput {
   requestType?: EndpointPayloadType;
   responseType?: EndpointPayloadType;
   sortOrder?: number;
+  callableBy?: EndpointCallableBy;
   status?: EndpointStatus;
 }
 

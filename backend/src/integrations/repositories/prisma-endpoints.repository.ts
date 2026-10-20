@@ -137,6 +137,7 @@ export class PrismaEndpointsRepository {
           request_type: dto.requestType,
           response_type: dto.responseType,
           sort_order: dto.sortOrder ?? 1,
+          callable_by: dto.callableBy === 'ALL' ? 'E' : 'A',
           add_date: now,
           edit_date: now,
           // status intentionally omitted — integration_detail.status
@@ -161,6 +162,7 @@ export class PrismaEndpointsRepository {
           ...(dto.requestType !== undefined && { request_type: dto.requestType }),
           ...(dto.responseType !== undefined && { response_type: dto.responseType }),
           ...(dto.sortOrder !== undefined && { sort_order: dto.sortOrder }),
+          ...(dto.callableBy !== undefined && { callable_by: dto.callableBy === 'ALL' ? 'E' : 'A' }),
           ...(dto.status !== undefined && { status: toStatusCode(dto.status) }),
           edit_date: new Date(),
         },
@@ -223,6 +225,7 @@ export class PrismaEndpointsRepository {
       sortOrder: row.sort_order,
       status: fromStatusCode(row.status),
       fieldMappingEnabled: row.field_mapping_enabled === 'Y',
+      callableBy: row.callable_by === 'E' ? 'ALL' : 'ADMIN',
     };
   }
 
