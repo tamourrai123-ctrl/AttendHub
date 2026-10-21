@@ -82,6 +82,7 @@ export interface TestEndpointResult {
   mappedSample?: unknown;
   /** POST test only: the body the hub built from the sample record and the mappings and sent to HR. */
   sentBody?: unknown;
+  sentAsIs?: boolean;
 }
 
 /** One AttendHub-side field a mapping on a "purpose" endpoint may use — see backend's endpoint-purposes.constant.ts. */

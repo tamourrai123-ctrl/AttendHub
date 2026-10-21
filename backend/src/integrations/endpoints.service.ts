@@ -32,6 +32,8 @@ export interface TestEndpointResult extends Omit<ExecutionResult, 'body'> {
   mappedSample?: unknown;
   /** POST test only: the body the hub built from the sample record and the active mappings and sent to HR. */
   sentBody?: unknown;
+  /** True when no field mapping applied, so the typed record was sent exactly as written. */
+  sentAsIs?: boolean;
 }
 
 /**
@@ -227,6 +229,7 @@ export class EndpointsService {
 
     // POST (Outbound): build the body from the sample record + the active mappings, then really send it.
     let sentBody: Record<string, unknown> | undefined;
+    let sentAsIs = false;
     if (endpoint.httpMethod !== 'GET') {
       const purpose = findEndpointPurposeByName(endpoint.name);
       const activeMappings = await this.fieldMappingsRepository.findActiveByEndpoint(companyId, integrationId, endpointId);
@@ -234,10 +237,18 @@ export class EndpointsService {
       const sendMappings = activeMappings
         .map((mapping) => this.fieldMappingEngine.toDomainMapping(mapping))
         .filter((mapping) => !requestFields || requestFields.includes(mapping.sourcePath));
-      if (sendMappings.length === 0 && purpose && (purpose.fields.length > 0 || (purpose.requestFields?.length ?? 0) > 0)) {
-        throw new BadRequestException('Add at least one field mapping before sending a test to your HR system.');
+      const record = sampleRecord ?? {};
+      if (Object.keys(record).length === 0) {
+        throw new BadRequestException('Type the record to send (JSON) in the sample box first.');
       }
-      sentBody = this.fieldMappingEngine.apply(sampleRecord ?? {}, sendMappings);
+      if (sendMappings.length > 0 && this.fieldMappingEngine.matchesAny(record, sendMappings)) {
+        // The record uses AttendHub field names: send it through the mappings.
+        sentBody = this.fieldMappingEngine.apply(record, sendMappings);
+      } else {
+        // No mapping applies (none set, or the record is already in the HR system's own field names): send it exactly as typed.
+        sentBody = record;
+        sentAsIs = true;
+      }
     }
 
     const result = await this.executor.execute(companyId, integrationId, endpointId, params, sentBody);
@@ -277,6 +288,7 @@ export class EndpointsService {
       detectedFields: hasBody ? this.fieldDetector.detect(body) : undefined,
       mappedSample,
       sentBody,
+      sentAsIs: sentBody !== undefined ? sentAsIs : undefined,
     };
   }
 

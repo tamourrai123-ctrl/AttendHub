@@ -32,6 +32,11 @@ export class FieldMappingService {
     return output;
   }
 
+  /** True when at least one mapping's source field exists in the record. False means the record does not use these mappings' field names. */
+  matchesAny(sourceRecord: Record<string, unknown>, mappings: FieldMapping[]): boolean {
+    return mappings.some((mapping) => this.resolvePath(sourceRecord, mapping.sourcePath) !== undefined);
+  }
+
   private resolvePath(record: unknown, path: string): unknown {
     return path.split('.').reduce<unknown>((current, key) => {
       if (current === null || current === undefined || typeof current !== 'object') {

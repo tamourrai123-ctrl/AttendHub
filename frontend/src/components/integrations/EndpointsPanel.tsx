@@ -28,6 +28,28 @@ import type {
 } from "../../types/endpoint";
 
 const CUSTOM_PURPOSE_VALUE = "__CUSTOM__";
+
+/** Example values for the sample record, so "What would be sent" shows real-looking data instead of blanks. Replace them with values your HR system knows. */
+function exampleValueFor(field: string): string {
+  const now = Date.now();
+  const examples: Record<string, string> = {
+    companyId: "1",
+    userId: "1000",
+    employeeId: "1000",
+    accessToken: "test-access-token",
+    refreshToken: "test-refresh-token",
+    accessTokenExpiry: new Date(now + 3600_000).toISOString(),
+    refreshTokenExpiry: new Date(now + 30 * 86400_000).toISOString(),
+    deviceId: "TEST-DEVICE-1",
+    deviceName: "Test Phone",
+    appVersion: "1.0.0",
+    ipAddress: "192.168.1.100",
+    lastAccessTime: new Date(now).toISOString(),
+    createdOn: new Date(now).toISOString(),
+    status: "ACTIVE",
+  };
+  return examples[field] ?? "test";
+}
 const PAYLOAD_TYPES: EndpointPayloadType[] = ["JSON", "XML", "FORM"];
 const DIRECTION_TABS: { key: EndpointDirection; label: string }[] = [
   { key: "INBOUND", label: "Inbound — from HR" },
@@ -93,7 +115,8 @@ export default function EndpointsPanel({ integrationId, companyId }: EndpointsPa
   const [testErrors, setTestErrors] = useState<Record<string, string>>({});
 
   const [testParams, setTestParams] = useState<Record<string, Record<string, string>>>({});
-  const [previewSampleText, setPreviewSampleText] = useState("{}");
+  // One sample record per endpoint, so what you type under one endpoint never shows up under another.
+  const [sampleTexts, setSampleTexts] = useState<Record<string, string>>({});
   const [previewResult, setPreviewResult] = useState<unknown>(undefined);
   const [previewError, setPreviewError] = useState<string | undefined>(undefined);
   const [isPreviewing, setIsPreviewing] = useState(false);
@@ -223,16 +246,18 @@ export default function EndpointsPanel({ integrationId, companyId }: EndpointsPa
     }
   };
 
+  const sampleTextFor = (endpoint: IntegrationEndpoint): string => {
+    if (sampleTexts[endpoint.id] !== undefined) return sampleTexts[endpoint.id];
+    // Outbound: start with this purpose's own AttendHub field names so nothing has to be typed from scratch.
+    const purpose = purposeByName.get(endpoint.name);
+    const names = purpose ? (purpose.requestFields?.length ? purpose.requestFields : purpose.fields).map((field) => field.field) : [];
+    return endpoint.direction === "OUTBOUND" && names.length > 0 ? JSON.stringify(Object.fromEntries(names.map((name) => [name, exampleValueFor(name)])), null, 2) : "{}";
+  };
+
   const toggleExpanded = (endpoint: IntegrationEndpoint) => {
     setExpandedId((current) => (current === endpoint.id ? null : endpoint.id));
     setPreviewResult(undefined);
     setPreviewError(undefined);
-    // Outbound: start the sample record with this purpose's own AttendHub field names so nothing has to be typed from scratch.
-    const purpose = purposeByName.get(endpoint.name);
-    const names = purpose ? (purpose.requestFields?.length ? purpose.requestFields : purpose.fields).map((field) => field.field) : [];
-    if (endpoint.direction === "OUTBOUND" && names.length > 0) {
-      setPreviewSampleText(JSON.stringify(Object.fromEntries(names.map((name) => [name, ""])), null, 2));
-    }
   };
 
   const handleTestInbound = async (endpoint: IntegrationEndpoint) => {
@@ -266,7 +291,7 @@ export default function EndpointsPanel({ integrationId, companyId }: EndpointsPa
     setExpandedId(endpoint.id);
     let sampleRecord: Record<string, unknown>;
     try {
-      const parsed = JSON.parse(previewSampleText);
+      const parsed = JSON.parse(sampleTextFor(endpoint));
       if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) throw new Error("not an object");
       sampleRecord = parsed;
     } catch {
@@ -291,7 +316,7 @@ export default function EndpointsPanel({ integrationId, companyId }: EndpointsPa
     setPreviewResult(undefined);
     let sampleRecord: Record<string, unknown>;
     try {
-      const parsed = JSON.parse(previewSampleText);
+      const parsed = JSON.parse(sampleTextFor(endpoint));
       if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) throw new Error("not an object");
       sampleRecord = parsed;
     } catch {
@@ -302,12 +327,16 @@ export default function EndpointsPanel({ integrationId, companyId }: EndpointsPa
     setIsPreviewing(true);
     try {
       const mappingsResult = await getFieldMappings(integrationId, endpoint.id, companyId, 1, 100);
-      if (mappingsResult.items.length === 0) {
-        setPreviewError("Add at least one field mapping below before previewing what would be sent.");
-        return;
+      const mapped = mappingsResult.items.length > 0 ? await previewFieldMapping(sampleRecord, mappingsResult.items.map(toPreviewMapping)) : undefined;
+      const usesMappings =
+        mappingsResult.items.length > 0 &&
+        mappingsResult.items.some((mapping) => Object.prototype.hasOwnProperty.call(sampleRecord, mapping.sourcePath.split(".")[0]));
+      if (usesMappings) {
+        setPreviewResult(mapped);
+      } else {
+        setPreviewResult(sampleRecord);
+        setPreviewError("No field mapping applies to this record, so it would be sent exactly as you typed it.");
       }
-      const mapped = await previewFieldMapping(sampleRecord, mappingsResult.items.map(toPreviewMapping));
-      setPreviewResult(mapped);
     } catch (err) {
       setPreviewError(errorMessageFor(err, "Something went wrong while previewing this mapping."));
     } finally {
@@ -502,8 +531,8 @@ export default function EndpointsPanel({ integrationId, companyId }: EndpointsPa
                             Sample AttendHub record to preview (JSON)
                           </label>
                           <textarea
-                            value={previewSampleText}
-                            onChange={(e) => setPreviewSampleText(e.target.value)}
+                            value={sampleTextFor(endpoint)}
+                            onChange={(e) => setSampleTexts((prev) => ({ ...prev, [endpoint.id]: e.target.value }))}
                             rows={4}
                             className="block w-full rounded-lg border border-slate-300 bg-white p-3 font-mono text-xs text-slate-900 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/40"
                           />
@@ -546,6 +575,9 @@ export default function EndpointsPanel({ integrationId, companyId }: EndpointsPa
                             {testResult.sentBody !== undefined && (
                               <div>
                                 <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-500">What was sent to HR</p>
+                                {testResult.sentAsIs && (
+                                  <p className="mb-1 text-xs text-slate-500">No field mapping applied, so your record was sent exactly as you typed it.</p>
+                                )}
                                 <JsonViewer data={testResult.sentBody} />
                               </div>
                             )}
@@ -557,7 +589,7 @@ export default function EndpointsPanel({ integrationId, companyId }: EndpointsPa
                             )}
                           </div>
                         )}
-                        {previewError && <p className="text-sm text-red-600">{previewError}</p>}
+                        {previewError && <p className={previewResult !== undefined ? "text-sm text-slate-500" : "text-sm text-red-600"}>{previewError}</p>}
                         {previewResult !== undefined && (
                           <div>
                             <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-500">

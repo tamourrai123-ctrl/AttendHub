@@ -65,9 +65,23 @@ describe('test endpoint (POST) sends a real mapped body', () => {
     expect(out.sampleBody).toEqual({ status: 'FAILED', message: 'ORA-01843: not a valid month' });
   });
 
-  it('refuses to send when no mapping exists yet', async () => {
+  it('sends the typed record exactly as written when no mapping exists', async () => {
     const { service, execute } = build([]);
-    await expect(service.testEndpoint('cA', 'i1', 'e1', undefined, 'admin', { state: 'I' })).rejects.toThrow(BadRequestException);
+    const out = await service.testEndpoint('cA', 'i1', 'e1', undefined, 'admin', { user_id: '1108' });
+    expect(execute).toHaveBeenCalledWith('cA', 'i1', 'e1', { shortname: 'DEMO' }, { user_id: '1108' });
+    expect(out.sentAsIs).toBe(true);
+  });
+
+  it('sends a record already in the HR field names as written, even when mappings exist', async () => {
+    const { service } = build([mapping('userId', 'user_id')]);
+    const out = await service.testEndpoint('cA', 'i1', 'e1', undefined, 'admin', { user_id: '1108' });
+    expect(out.sentBody).toEqual({ user_id: '1108' });
+    expect(out.sentAsIs).toBe(true);
+  });
+
+  it('refuses an empty sample record', async () => {
+    const { service, execute } = build([mapping('userId', 'user_id')]);
+    await expect(service.testEndpoint('cA', 'i1', 'e1', undefined, 'admin', {})).rejects.toThrow(BadRequestException);
     expect(execute).not.toHaveBeenCalled();
   });
 });
