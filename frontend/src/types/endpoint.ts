@@ -113,4 +113,6 @@ export interface EndpointPurpose {
    */
   requestFields?: EndpointPurposeField[];
   responseFields?: EndpointPurposeField[];
+  /** True when this entry is a Super Admin global endpoint (added on the client from /global-endpoints/available), not a built-in purpose. */
+  isGlobal?: boolean;
 }

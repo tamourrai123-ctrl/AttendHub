@@ -8,6 +8,8 @@ import Table from "../../components/ui/Table";
 import EmptyState from "../../components/ui/EmptyState";
 import LoadingState from "../../components/ui/LoadingState";
 import ErrorState from "../../components/ui/ErrorState";
+import PaymentsTable from "../../components/payments/PaymentsTable";
+import { getMyPayments } from "../../api/payments";
 import ConfirmDialog from "../../components/ui/ConfirmDialog";
 import PlanCard from "../../components/plans/PlanCard";
 import { useToast } from "../../components/feedback/ToastContext";
@@ -257,6 +259,11 @@ export default function Plan() {
             ) : (
               <Table columns={columns} data={appUsers} rowKey={(u) => u.externalEmployeeId} />
             )}
+          </Card>
+
+          <Card>
+            <CardHeader title="Billing" description="Payments made for your plan." />
+            <PaymentsTable fetchPage={(query) => getMyPayments(query)} pageSize={5} />
           </Card>
         </div>
       )}

@@ -13,6 +13,7 @@ import { CreateEndpointDto } from './dto/create-endpoint.dto';
 import { UpdateEndpointDto } from './dto/update-endpoint.dto';
 import { hrBodyReportsFailure } from './utils/hr-failure-body.util';
 import { findEndpointPurposeByName } from './constants/endpoint-purposes.constant';
+import { GlobalEndpointsService, methodFitsDirection } from './global-endpoints.service';
 import { defaultPathParams } from './utils/default-path-params.util';
 
 /** How many elements of an array are kept in a test response's sample body — the full array may be arbitrarily large and this is only shown for the admin to eyeball while configuring a mapping. */
@@ -60,6 +61,7 @@ export class EndpointsService {
     private readonly fieldMappingEngine: FieldMappingService,
     private readonly systemLogsService: SystemLogsService,
     @Optional() private readonly companiesRepository?: PrismaCompaniesRepository,
+    @Optional() private readonly globalEndpoints?: GlobalEndpointsService,
   ) {}
 
   private async assertIntegrationExists(companyId: string, integrationId: string): Promise<void> {
@@ -110,6 +112,22 @@ export class EndpointsService {
     }
   }
 
+  /**
+   * A name that matches an active Super Admin global endpoint must follow its direction, and takes its
+   * "who may call it" setting. Returns the callableBy to store (undefined = leave the DTO value as is).
+   */
+  private async applyGlobalEndpoint(name: string, httpMethod: string): Promise<'ADMIN' | 'ALL' | undefined> {
+    if (findEndpointPurposeByName(name) || !this.globalEndpoints) return undefined;
+    const global = await this.globalEndpoints.findActiveByName(name);
+    if (!global) return undefined;
+    if (!methodFitsDirection(global.direction, httpMethod)) {
+      throw new BadRequestException(
+        `"${global.label}" is an ${global.direction.toLowerCase()} endpoint, so it must use ${global.direction === 'INBOUND' ? 'GET' : 'POST, PUT, PATCH or DELETE'}, not ${httpMethod}.`,
+      );
+    }
+    return global.callableBy;
+  }
+
   async create(
     companyId: string,
     integrationId: string,
@@ -118,7 +136,8 @@ export class EndpointsService {
   ): Promise<IntegrationEndpoint> {
     await this.assertIntegrationExists(companyId, integrationId);
     this.assertHttpMethodMatchesPurpose(dto.name, dto.httpMethod);
-    const endpoint = await this.repository.create(companyId, integrationId, dto);
+    const globalCallableBy = await this.applyGlobalEndpoint(dto.name, dto.httpMethod);
+    const endpoint = await this.repository.create(companyId, integrationId, globalCallableBy ? { ...dto, callableBy: globalCallableBy } : dto);
 
     this.systemLogsService.record({
       user: actorName,
@@ -141,7 +160,8 @@ export class EndpointsService {
   ): Promise<IntegrationEndpoint> {
     const existing = await this.findOne(companyId, integrationId, endpointId); // 404s if missing or mismatched integration
     this.assertHttpMethodMatchesPurpose(dto.name ?? existing.name, dto.httpMethod ?? existing.httpMethod);
-    const updated = await this.repository.update(companyId, endpointId, dto);
+    const globalCallableBy = await this.applyGlobalEndpoint(dto.name ?? existing.name, dto.httpMethod ?? existing.httpMethod);
+    const updated = await this.repository.update(companyId, endpointId, globalCallableBy ? { ...dto, callableBy: globalCallableBy } : dto);
     if (!updated) {
       throw new NotFoundException('Endpoint not found.');
     }

@@ -4,9 +4,11 @@ import {
   LayoutDashboard,
   Building2,
   Plug,
+  Globe,
   Activity,
   FileClock,
   Tag,
+  Receipt,
   Settings,
 } from "lucide-react";
 import Sidebar from "../components/layout/Sidebar";
@@ -18,9 +20,11 @@ const NAV_ITEMS: NavItemDefinition[] = [
   { label: "Dashboard", to: "/control/dashboard", icon: LayoutDashboard },
   { label: "Companies", to: "/control/companies", icon: Building2 },
   { label: "Integrations", to: "/control/integrations", icon: Plug },
+  { label: "Global Endpoints", to: "/control/global-endpoints", icon: Globe },
   { label: "API Monitoring", to: "/control/api-monitoring", icon: Activity },
   { label: "System Logs", to: "/control/system-logs", icon: FileClock },
   { label: "Pricing", to: "/control/pricing", icon: Tag },
+  { label: "Payments", to: "/control/payments", icon: Receipt },
 ];
 
 const FOOTER_ITEMS: NavItemDefinition[] = [

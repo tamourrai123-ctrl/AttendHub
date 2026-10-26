@@ -213,6 +213,7 @@ model usm_company {
   usm_company                usm_company?                @relation("usm_companyTousm_company", fields: [pid], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_usm_company_pid")
   other_usm_company          usm_company[]               @relation("usm_companyTousm_company")
   usm_users                  usm_users[]
+  payments                   payments[]
 }
 
 /// This table contains a partial (filtered) unique index —
@@ -318,4 +319,39 @@ model mobile_app_users {
   usm_company          usm_company @relation(fields: [company_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_mobile_app_users_company")
 
   @@id([company_id, external_employee_id], map: "pk_mobile_app_users")
+}
+
+/// One row per payment a company made for its plan. Filled by the payment gateway's webhook (nothing is entered by hand yet).
+model global_endpoint {
+  id          BigInt   @id(map: "pk_global_endpoint") @default(autoincrement())
+  name        String   @unique(map: "uq_global_endpoint_name") @db.VarChar(60)
+  label       String   @db.VarChar(100)
+  description String?  @db.VarChar(255)
+  direction   String   @db.Char(1)
+  http_method String   @default("GET") @db.VarChar(10)
+  fields      Json     @default("[]")
+  callable_by String   @default("A") @db.Char(1)
+  status      String   @default("Y") @db.Char(1)
+  created_by  String?  @db.VarChar(100)
+  created_at  DateTime @default(now()) @db.Timestamp(6)
+  updated_at  DateTime @default(now()) @db.Timestamp(6)
+}
+
+model payments {
+  id           BigInt      @id(map: "pk_payments") @default(autoincrement())
+  company_id   String      @db.VarChar(2)
+  plan_name    String?     @db.VarChar(100)
+  amount       Decimal     @db.Decimal(12, 2)
+  currency     String      @db.VarChar(3)
+  status       String      @db.VarChar(10)
+  method       String?     @db.VarChar(50)
+  provider     String?     @db.VarChar(50)
+  reference    String?     @db.VarChar(120)
+  period_start DateTime?   @db.Timestamp(6)
+  period_end   DateTime?   @db.Timestamp(6)
+  paid_at      DateTime?   @db.Timestamp(6)
+  created_at   DateTime    @default(now()) @db.Timestamp(6)
+  usm_company  usm_company @relation(fields: [company_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_payments_company")
+
+  @@index([company_id, created_at(sort: Desc)], map: "ix_payments_company_created")
 }

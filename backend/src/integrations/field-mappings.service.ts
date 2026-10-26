@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { paginatedResult, PaginatedResult, toSkipTake } from '../common/utils/paginate';
 import { SystemLogsService } from '../system-logs/system-logs.service';
 import { PrismaFieldMappingsRepository } from './repositories/prisma-field-mappings.repository';
@@ -9,6 +9,7 @@ import { CreateFieldMappingDto } from './dto/create-field-mapping.dto';
 import { UpdateFieldMappingDto } from './dto/update-field-mapping.dto';
 import { IntegrationEndpoint } from './interfaces/endpoint.interface';
 import { findEndpointPurposeByName } from './constants/endpoint-purposes.constant';
+import { GlobalEndpointsService } from './global-endpoints.service';
 
 /**
  * Persistence/ownership orchestration for field mappings
@@ -38,6 +39,7 @@ export class FieldMappingsService {
     private readonly endpointsService: EndpointsService,
     private readonly fieldMappingEngine: FieldMappingService,
     private readonly systemLogsService: SystemLogsService,
+    @Optional() private readonly globalEndpoints?: GlobalEndpointsService,
   ) {}
 
   /** 404s if the integration doesn't belong to companyId, or the endpoint doesn't belong to that integration — the full ownership chain in one call. Returns the endpoint itself so callers that need its name/direction (create/update) don't have to fetch it twice. */
@@ -80,9 +82,10 @@ export class FieldMappingsService {
     }
   }
 
-  private assertFieldAllowedForPurpose(endpoint: IntegrationEndpoint, sourcePath: string, targetField: string): void {
+  private async assertFieldAllowedForPurpose(endpoint: IntegrationEndpoint, sourcePath: string, targetField: string): Promise<void> {
     const purpose = findEndpointPurposeByName(endpoint.name);
     if (!purpose) {
+      await this.assertFieldAllowedForGlobal(endpoint, sourcePath, targetField);
       return;
     }
 
@@ -110,6 +113,23 @@ export class FieldMappingsService {
     if (!allowed.includes(ownField)) {
       throw new BadRequestException(
         `For the "${purpose.label}" purpose, ${ownFieldLabel} must be one of: ${allowed.join(', ')}. Got "${ownField}".`,
+      );
+    }
+  }
+
+  /**
+   * A Super Admin global endpoint can list AttendHub-side fields. When it does, the AttendHub side of a mapping
+   * (targetField for Inbound, sourcePath for Outbound) must be one of them; with no list the admin types freely.
+   */
+  private async assertFieldAllowedForGlobal(endpoint: IntegrationEndpoint, sourcePath: string, targetField: string): Promise<void> {
+    if (!this.globalEndpoints) return;
+    const global = await this.globalEndpoints.findActiveByName(endpoint.name);
+    if (!global || global.fields.length === 0) return;
+    const ownField = global.direction === 'INBOUND' ? targetField : sourcePath;
+    const allowed = global.fields.map((field) => field.field);
+    if (!allowed.includes(ownField)) {
+      throw new BadRequestException(
+        `For "${global.label}", ${global.direction === 'INBOUND' ? 'targetField' : 'sourcePath'} must be one of: ${allowed.join(', ')}. Got "${ownField}".`,
       );
     }
   }
@@ -145,7 +165,7 @@ export class FieldMappingsService {
   ): Promise<FieldMappingRecord> {
     const endpoint = await this.assertEndpointExists(companyId, integrationId, endpointId);
     this.assertMappingEditingAllowed(endpoint);
-    this.assertFieldAllowedForPurpose(endpoint, dto.sourcePath, dto.targetField);
+    await this.assertFieldAllowedForPurpose(endpoint, dto.sourcePath, dto.targetField);
     const transformType = dto.transformType ?? 'NONE';
     this.fieldMappingEngine.validateTransformConfig(transformType, dto.transformConfig ?? {});
 
@@ -174,7 +194,7 @@ export class FieldMappingsService {
     const existing = await this.findOne(companyId, integrationId, endpointId, mappingId); // 404s if missing or mismatched endpoint/integration
     const endpoint = await this.assertEndpointExists(companyId, integrationId, endpointId);
     this.assertMappingEditingAllowed(endpoint);
-    this.assertFieldAllowedForPurpose(endpoint, dto.sourcePath ?? existing.sourcePath, dto.targetField ?? existing.targetField);
+    await this.assertFieldAllowedForPurpose(endpoint, dto.sourcePath ?? existing.sourcePath, dto.targetField ?? existing.targetField);
 
     const transformType = dto.transformType ?? existing.transformType;
     const transformConfig = dto.transformConfig ?? existing.transformConfig;

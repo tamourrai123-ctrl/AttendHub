@@ -2,7 +2,6 @@ import { useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
-  Users,
   Plug,
   CreditCard,
   Settings,
@@ -16,7 +15,6 @@ import type { NavItemDefinition } from "../types/common";
 
 const NAV_ITEMS: NavItemDefinition[] = [
   { label: "Dashboard", to: "/company/dashboard", icon: LayoutDashboard },
-  { label: "Employees", to: "/company/employees", icon: Users },
   { label: "Integrations", to: "/company/integrations", icon: Plug },
   { label: "Plan & usage", to: "/company/plan", icon: CreditCard },
 ];

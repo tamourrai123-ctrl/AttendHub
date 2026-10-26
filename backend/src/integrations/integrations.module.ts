@@ -9,6 +9,9 @@ import { IntegrationsController } from './integrations.controller';
 import { IntegrationsService } from './integrations.service';
 import { EndpointsController } from './endpoints.controller';
 import { EndpointsService } from './endpoints.service';
+import { GlobalEndpointsController } from './global-endpoints.controller';
+import { GlobalEndpointsService } from './global-endpoints.service';
+import { PrismaGlobalEndpointsRepository } from './repositories/prisma-global-endpoints.repository';
 import { IntegrationToolsController } from './integration-tools.controller';
 import { FieldMappingsController } from './field-mappings.controller';
 import { FieldMappingsService } from './field-mappings.service';
@@ -109,6 +112,7 @@ import { HrLookupService } from './hr-lookup.service';
   controllers: [
     IntegrationsController,
     EndpointsController,
+    GlobalEndpointsController,
     IntegrationToolsController,
     FieldMappingsController,
     HrEmployeesController,
@@ -121,6 +125,8 @@ import { HrLookupService } from './hr-lookup.service';
     PrismaIntegrationsRepository,
     EndpointsService,
     PrismaEndpointsRepository,
+    GlobalEndpointsService,
+    PrismaGlobalEndpointsRepository,
     FieldMappingsService,
     PrismaFieldMappingsRepository,
     HrEmployeesService,

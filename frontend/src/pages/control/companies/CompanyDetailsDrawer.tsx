@@ -4,6 +4,8 @@ import Drawer from "../../../components/ui/Drawer";
 import Badge from "../../../components/ui/Badge";
 import LoadingState from "../../../components/ui/LoadingState";
 import EmptyState from "../../../components/ui/EmptyState";
+import PaymentsTable from "../../../components/payments/PaymentsTable";
+import { getPayments } from "../../../api/payments";
 import { getIntegrations } from "../../../api/integrations";
 import { getApiLogs } from "../../../api/monitoring";
 import { getSystemLogs } from "../../../api/systemLogs";
@@ -32,8 +34,8 @@ export default function CompanyDetailsDrawer({ company, onClose }: CompanyDetail
     // Real backend data. Each source is fetched independently so one failing
     // call doesn't blank the whole drawer.
     Promise.all([
-      getIntegrations({ page: 1, limit: 500 }).catch(() => null),
-      getApiLogs({ page: 1, limit: 500 }).catch(() => null),
+      getIntegrations({ page: 1, limit: 100 }).catch(() => null),
+      getApiLogs({ page: 1, limit: 100 }).catch(() => null),
       getSystemLogs({ page: 1, limit: 100 }).catch(() => null),
     ]).then(([integrationResult, logs, activity]) => {
       if (cancelled) return;
@@ -124,6 +126,13 @@ export default function CompanyDetailsDrawer({ company, onClose }: CompanyDetail
               </div>
             ) : (
               <EmptyState title="No integration configured" description="This company hasn't set up an integration yet." />
+            )}
+          </section>
+
+          <section className="border-t border-slate-100 pt-5">
+            <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Payment History</h3>
+            {company && (
+              <PaymentsTable fetchPage={(query) => getPayments({ ...query, companyId: company.id })} pageSize={5} resetKey={company.id} />
             )}
           </section>
 

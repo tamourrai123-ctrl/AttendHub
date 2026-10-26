@@ -14,6 +14,7 @@ import JsonViewer from "../ui/JsonViewer";
 import { useToast } from "../feedback/ToastContext";
 import { createEndpoint, deleteEndpoint, getEndpointPurposes, getEndpoints, testEndpoint, updateEndpoint } from "../../api/endpoints";
 import { getFieldMappings } from "../../api/fieldMappings";
+import { getAvailableGlobalEndpoints } from "../../api/globalEndpoints";
 import { previewFieldMapping, toPreviewMapping } from "../../api/integrationTools";
 import { ApiError } from "../../api/client";
 import FieldMappingEditor from "./FieldMappingEditor";
@@ -97,6 +98,7 @@ export default function EndpointsPanel({ integrationId, companyId }: EndpointsPa
   const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
   const [loadError, setLoadError] = useState<string | undefined>(undefined);
   const [endpoints, setEndpoints] = useState<IntegrationEndpoint[]>([]);
+  // Built-in purposes first, then the Super Admin's global endpoints (same shape, flagged isGlobal).
   const [purposes, setPurposes] = useState<EndpointPurpose[]>([]);
   const [direction, setDirection] = useState<EndpointDirection>("INBOUND");
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -126,12 +128,25 @@ export default function EndpointsPanel({ integrationId, companyId }: EndpointsPa
   const load = useCallback(async () => {
     setStatus("loading");
     try {
-      const [endpointsResult, purposesResult] = await Promise.all([
+      const [endpointsResult, purposesResult, globalsResult] = await Promise.all([
         getEndpoints(integrationId, companyId, 1, 100),
         getEndpointPurposes(),
+        // Global endpoints are an extra: if they can't be loaded, the built-in list still works.
+        getAvailableGlobalEndpoints().catch(() => []),
       ]);
       setEndpoints(endpointsResult.items);
-      setPurposes(purposesResult);
+      setPurposes([
+        ...purposesResult,
+        ...globalsResult.map<EndpointPurpose>((global) => ({
+          name: global.name,
+          label: global.label,
+          direction: global.direction,
+          defaultHttpMethod: global.defaultHttpMethod,
+          description: global.description ?? `${global.label} — set up by the platform. Write the path your HR system uses for it.`,
+          fields: global.fields,
+          isGlobal: true,
+        })),
+      ]);
       setStatus("success");
     } catch (err) {
       setLoadError(errorMessageFor(err, "We couldn't load endpoints for this integration."));
@@ -602,7 +617,13 @@ export default function EndpointsPanel({ integrationId, companyId }: EndpointsPa
                     )}
 
                     {endpoint.fieldMappingEnabled === true && (
-                      <FieldMappingEditor integrationId={integrationId} companyId={companyId} endpoint={endpoint} purpose={purpose} />
+                      <FieldMappingEditor
+                        integrationId={integrationId}
+                        companyId={companyId}
+                        endpoint={endpoint}
+                        // A global endpoint with no field list lets the admin type field names, like a custom endpoint.
+                        purpose={purpose && (!purpose.isGlobal || purpose.fields.length > 0) ? purpose : undefined}
+                      />
                     )}
                   </div>
                 )}
@@ -652,7 +673,10 @@ export default function EndpointsPanel({ integrationId, companyId }: EndpointsPa
               </optgroup>
             </select>
             {form.purposeName !== CUSTOM_PURPOSE_VALUE && (
-              <p className="mt-1.5 text-xs text-slate-500">{purposeByName.get(form.purposeName)?.description}</p>
+              <p className="mt-1.5 text-xs text-slate-500">
+                {purposeByName.get(form.purposeName)?.description}
+                {selectedPurpose?.isGlobal && ` The app calls it at /hr/custom/${form.name}. The platform decides who can call it.`}
+              </p>
             )}
           </div>
 

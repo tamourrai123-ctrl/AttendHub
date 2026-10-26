@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { UserCheck, UserX, Clock3, CalendarX, Users, Plug } from "lucide-react";
+import { UserCheck, UserX, Clock3, CalendarX, Users, Plug, Smartphone, Percent } from "lucide-react";
 import PageHeader from "../../components/ui/PageHeader";
 import StatCard from "../../components/ui/StatCard";
 import Card, { CardHeader } from "../../components/ui/Card";
@@ -13,6 +13,8 @@ import { useAuth } from "../../contexts/AuthContext";
 import { getEmployees } from "../../api/employees";
 import { getAttendanceReport } from "../../api/reports";
 import { getMyIntegration } from "../../api/integrations";
+import { getMySubscription } from "../../api/subscription";
+import type { CompanySubscription } from "../../types/subscription";
 import { getMyRecentActivity } from "../../api/systemLogs";
 import { formatRelativeTime } from "../../lib/format";
 import { INTEGRATION_STATUS_BADGE, INTEGRATION_STATUS_LABEL } from "../../lib/statusBadges";
@@ -27,6 +29,9 @@ interface DashboardData {
   report: CompanyAttendanceReport;
   integration: Integration | null;
   activity: ActivityItem[];
+  subscription: CompanySubscription | null;
+  /** false when the live attendance numbers could not be loaded (HR not set up, or HR answered with an error). */
+  attendanceAvailable: boolean;
 }
 
 const WEEKDAY_FORMATTER = new Intl.DateTimeFormat("en-US", { weekday: "short", timeZone: "UTC" });
@@ -93,13 +98,28 @@ export default function CompanyDashboard() {
     }
     setStatus("loading");
     try {
-      const [employeeList, report, integration, recentActivity] = await Promise.all([
+      // Each source is optional: one failing (e.g. HR attendance not set up yet) must not blank the whole dashboard.
+      const [employeeResult, reportResult, integrationResult, activityResult, subscriptionResult] = await Promise.allSettled([
         getEmployees({ limit: 1 }),
         getAttendanceReport(),
         getMyIntegration(),
         getMyRecentActivity(),
+        getMySubscription(),
       ]);
+      if (
+        employeeResult.status === "rejected" &&
+        reportResult.status === "rejected" &&
+        integrationResult.status === "rejected" &&
+        subscriptionResult.status === "rejected"
+      ) {
+        throw new Error("Nothing could be loaded.");
+      }
 
+      const employeeTotal = employeeResult.status === "fulfilled" ? employeeResult.value.total : 0;
+      const attendanceAvailable = reportResult.status === "fulfilled";
+      const report: CompanyAttendanceReport = attendanceAvailable
+        ? reportResult.value
+        : ({ byDate: [], rangeLabel: "Not available" } as unknown as CompanyAttendanceReport);
       const todayRow = report.byDate.find((row) => row.date === todayIso());
       const attendanceSummary: AttendanceSummary = todayRow
         ? {
@@ -112,7 +132,15 @@ export default function CompanyDashboard() {
           }
         : EMPTY_SUMMARY;
 
-      setData({ employeeTotal: employeeList.total, attendanceSummary, report, integration, activity: toActivityItems(recentActivity) });
+      setData({
+        employeeTotal,
+        attendanceSummary,
+        report,
+        integration: integrationResult.status === "fulfilled" ? integrationResult.value : null,
+        activity: activityResult.status === "fulfilled" ? toActivityItems(activityResult.value) : [],
+        subscription: subscriptionResult.status === "fulfilled" ? subscriptionResult.value : null,
+        attendanceAvailable,
+      });
       setStatus("success");
     } catch {
       setStatus("error");
@@ -141,7 +169,12 @@ export default function CompanyDashboard() {
     );
   }
 
-  const { employeeTotal, attendanceSummary, report, integration, activity } = data;
+  const { employeeTotal, attendanceSummary, report, integration, activity, subscription, attendanceAvailable } = data;
+
+  const attended = attendanceSummary.present + attendanceSummary.late + attendanceSummary.halfDay;
+  const attendanceRate = attendanceAvailable && employeeTotal > 0 ? `${Math.round((attended / employeeTotal) * 100)}%` : "—";
+  const seatsUsed = subscription?.usage.activeAppUsers ?? 0;
+  const seatsMax = subscription?.usage.maxUsers ?? null;
 
   // Fold the five granular statuses into the two series the shared chart
   // component supports: "present" covers anyone who showed up in some form
@@ -166,6 +199,29 @@ export default function CompanyDashboard() {
         <StatCard label="On Leave Today" value={attendanceSummary.onLeave} icon={CalendarX} />
       </div>
 
+      {!attendanceAvailable && (
+        <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
+          Today's attendance numbers are not available. Check that your HR integration has an Attendance endpoint with field mappings.
+        </p>
+      )}
+
+      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard label="Total Employees" value={employeeTotal} icon={Users} helpText="Synced from your HR system" />
+        <StatCard
+          label="App Users"
+          value={seatsMax === null ? seatsUsed : `${seatsUsed} / ${seatsMax}`}
+          icon={Smartphone}
+          helpText={seatsMax === null ? "No seat limit on your account" : `${subscription?.usage.seatsLeft ?? 0} seats left`}
+        />
+        <StatCard label="Attendance Rate Today" value={attendanceRate} icon={Percent} helpText="Present, late and half day" />
+        <StatCard
+          label="HR Integration"
+          value={integration ? INTEGRATION_STATUS_LABEL[integration.status] : "Not set up"}
+          icon={Plug}
+          helpText={integration ? integration.integrationType : "Add it under Integrations"}
+        />
+      </div>
+
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
           <AttendanceChart data={chartData} title="Attendance Overview" description={report.rangeLabel} />
@@ -173,19 +229,7 @@ export default function CompanyDashboard() {
         <RecentActivityList items={activity} />
       </div>
 
-      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader title="Employees" description="Headcount for your company" />
-          <dl className="flex flex-col gap-3 text-sm">
-            <div className="flex items-center justify-between">
-              <dt className="flex items-center gap-1.5 text-slate-500">
-                <Users className="h-3.5 w-3.5" /> Total Employees
-              </dt>
-              <dd className="font-semibold text-slate-900">{employeeTotal}</dd>
-            </div>
-          </dl>
-        </Card>
-
+      <div className="mt-6 grid grid-cols-1 gap-6">
         <Card>
           <CardHeader title="HR Integration" description="Connection status with your HR system" />
           {integration ? (

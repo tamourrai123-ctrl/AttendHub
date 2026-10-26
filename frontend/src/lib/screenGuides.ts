@@ -36,6 +36,17 @@ export const SCREEN_GUIDES: Record<string, ScreenGuide> = {
     ],
     tip: "Custom mapping is off by default. The Company Admin only sees the mapping section after you switch it on for that endpoint.",
   },
+  "/control/global-endpoints": {
+    title: "Global endpoints",
+    intro: "Endpoints you define once for every company. Each company admin adds them from their own Integrations page.",
+    steps: [
+      "Press Add global endpoint. Give it a name (no spaces), a label and choose Inbound (reads from HR) or Outbound (sends to HR).",
+      "Optionally list the AttendHub fields, one per line. Company admins then pick from that list when mapping. Leave it empty to let them type their own.",
+      "Choose who can call it from the app: Company Admin only, or Admin and Employees.",
+      "Use the power icon to disable one without deleting it.",
+    ],
+    tip: "There is no path here. Each company admin writes the path their HR system uses, then tests and maps it themselves.",
+  },
   "/control/api-monitoring": {
     title: "API monitoring",
     intro: "Every call the platform makes to HR systems, with its result.",
@@ -63,6 +74,16 @@ export const SCREEN_GUIDES: Record<string, ScreenGuide> = {
       "Switch a plan off to hide it from new sign-ups without deleting it.",
     ],
   },
+  "/control/payments": {
+    title: "Payments",
+    intro: "Payment history of every company.",
+    steps: [
+      "Filter by status to find paid, pending, failed or refunded payments.",
+      "The Covers column shows which period a payment pays for.",
+      "Open a company in Companies to see only its payments.",
+    ],
+    tip: "Payments are recorded automatically once a payment gateway is connected. Nothing is entered by hand.",
+  },
   "/control/settings": {
     title: "Settings",
     intro: "Platform-wide options for the Super Admin.",
@@ -73,20 +94,10 @@ export const SCREEN_GUIDES: Record<string, ScreenGuide> = {
     title: "Your dashboard",
     intro: "Today's attendance for your company at a glance.",
     steps: [
-      "Check the cards for present, late and absent employees.",
+      "Check the cards for present, late and absent employees, total employees and app users.",
       "Use the chart to compare days.",
-      "Open Employees to look at one person.",
+      "Check seats used and the HR integration status.",
     ],
-  },
-  "/company/employees": {
-    title: "Employees",
-    intro: "The people from your HR system who can use the mobile app.",
-    steps: [
-      "Search or filter to find someone.",
-      "Open a row to see their details.",
-      "Use the sync action to pull the latest employee list from your HR system.",
-    ],
-    tip: "The number of app users you can have depends on your plan. See Plan & usage.",
   },
   "/company/integrations": {
     title: "Integrations",
@@ -107,6 +118,7 @@ export const SCREEN_GUIDES: Record<string, ScreenGuide> = {
     steps: [
       "Check how many seats are in use.",
       "Press Choose a plan or Upgrade to change plan.",
+      "Scroll down to Billing to see the payments made for your plan.",
       "When a trial ends, the mobile app pauses until you pick a plan.",
     ],
   },

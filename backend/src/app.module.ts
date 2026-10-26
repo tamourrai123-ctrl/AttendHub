@@ -16,6 +16,7 @@ import { LeaveModule } from './leave/leave.module';
 import { IntegrationsModule } from './integrations/integrations.module';
 import { PricingModule } from './pricing/pricing.module';
 import { SubscriptionsModule } from './subscriptions/subscriptions.module';
+import { PaymentsModule } from './payments/payments.module';
 import { ReportsModule } from './reports/reports.module';
 import { MonitoringModule } from './monitoring/monitoring.module';
 import { SettingsModule } from './settings/settings.module';
@@ -54,6 +55,7 @@ import { SettingsModule } from './settings/settings.module';
     IntegrationsModule,
     PricingModule,
     SubscriptionsModule,
+    PaymentsModule,
     ReportsModule,
     MonitoringModule,
   ],

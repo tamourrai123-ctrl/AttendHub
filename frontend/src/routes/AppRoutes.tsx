@@ -11,14 +11,15 @@ import ControlLayout from "../layouts/ControlLayout";
 import ControlDashboard from "../pages/control/Dashboard";
 import Companies from "../pages/control/Companies";
 import Integrations from "../pages/control/Integrations";
+import GlobalEndpoints from "../pages/control/GlobalEndpoints";
 import ApiMonitoring from "../pages/control/ApiMonitoring";
 import SystemLogs from "../pages/control/SystemLogs";
 import Pricing from "../pages/control/Pricing";
+import Payments from "../pages/control/Payments";
 import ControlSettings from "../pages/control/Settings";
 
 import CompanyLayout from "../layouts/CompanyLayout";
 import CompanyDashboard from "../pages/company/Dashboard";
-import Employees from "../pages/company/Employees";
 import CompanyIntegrations from "../pages/company/Integrations";
 import CompanySettings from "../pages/company/Settings";
 import Plan from "../pages/company/Plan";
@@ -46,9 +47,11 @@ export default function AppRoutes() {
         <Route path="dashboard" element={<ControlDashboard />} />
         <Route path="companies" element={<Companies />} />
         <Route path="integrations" element={<Integrations />} />
+        <Route path="global-endpoints" element={<GlobalEndpoints />} />
         <Route path="api-monitoring" element={<ApiMonitoring />} />
         <Route path="system-logs" element={<SystemLogs />} />
         <Route path="pricing" element={<Pricing />} />
+        <Route path="payments" element={<Payments />} />
         <Route path="settings" element={<ControlSettings />} />
       </Route>
 
@@ -63,7 +66,7 @@ export default function AppRoutes() {
       >
         <Route index element={<Navigate to="dashboard" replace />} />
         <Route path="dashboard" element={<CompanyDashboard />} />
-        <Route path="employees" element={<Employees />} />
+        <Route path="employees" element={<Navigate to="/company/dashboard" replace />} />
         <Route path="integrations" element={<CompanyIntegrations />} />
         <Route path="plan" element={<Plan />} />
         <Route path="settings" element={<CompanySettings />} />
