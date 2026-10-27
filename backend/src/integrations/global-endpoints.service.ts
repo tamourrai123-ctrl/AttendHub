@@ -121,7 +121,7 @@ export class GlobalEndpointsService {
     this.systemLogsService.record({
       user,
       action,
-      resource: 'GlobalEndpoint',
+      resource: 'Integration',
       resourceId: endpoint.id,
       ...(severity && { severity }),
       description,

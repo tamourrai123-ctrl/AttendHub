@@ -13,6 +13,7 @@ import { CreateEndpointDto } from './dto/create-endpoint.dto';
 import { UpdateEndpointDto } from './dto/update-endpoint.dto';
 import { hrBodyReportsFailure } from './utils/hr-failure-body.util';
 import { findEndpointPurposeByName } from './constants/endpoint-purposes.constant';
+import { OAUTH2_TOKEN_ENDPOINT_NAME } from './constants/reserved-endpoint-names.constant';
 import { GlobalEndpointsService, methodFitsDirection } from './global-endpoints.service';
 import { defaultPathParams } from './utils/default-path-params.util';
 
@@ -238,6 +239,19 @@ export class EndpointsService {
     sampleRecord?: Record<string, unknown>,
   ): Promise<TestEndpointResult> {
     const endpoint = await this.findOne(companyId, integrationId, endpointId); // 404s if missing or mismatched integration
+
+    // An endpoint that cannot work without a field mapping is not testable until it has one.
+    const purposeForTest = findEndpointPurposeByName(endpoint.name);
+    const needsMapping = endpoint.name !== OAUTH2_TOKEN_ENDPOINT_NAME && (Boolean(purposeForTest) || endpoint.httpMethod !== 'GET');
+    if (needsMapping) {
+      const existing = await this.fieldMappingsRepository.findActiveByEndpoint(companyId, integrationId, endpointId);
+      if (existing.length === 0) {
+        throw new BadRequestException(
+          'This endpoint needs a field mapping before it can be tested. Add one in its Field Mapping section ' +
+            "(if you can't see that section, ask your platform admin to enable custom mapping for this endpoint).",
+        );
+      }
+    }
 
     // The company's own short name fills {{shortname}} / :p_shortname by itself, exactly like a real mobile call does.
     // `date` (and any future default) is pre-filled with today unless the tester typed one.

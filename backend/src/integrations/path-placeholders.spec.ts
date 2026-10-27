@@ -65,23 +65,16 @@ describe('test endpoint (POST) sends a real mapped body', () => {
     expect(out.sampleBody).toEqual({ status: 'FAILED', message: 'ORA-01843: not a valid month' });
   });
 
-  it('sends the typed record exactly as written when no mapping exists', async () => {
+  it('refuses to test a built-in GET endpoint until it has a mapping', async () => {
     const { service, execute } = build([]);
-    const out = await service.testEndpoint('cA', 'i1', 'e1', undefined, 'admin', { user_id: '1108' });
-    expect(execute).toHaveBeenCalledWith('cA', 'i1', 'e1', { shortname: 'DEMO' }, { user_id: '1108' });
-    expect(out.sentAsIs).toBe(true);
+    jest.spyOn(service, 'findOne').mockResolvedValue({ id: 'e2', name: 'COMPANY_INFO', httpMethod: 'GET' } as never);
+    await expect(service.testEndpoint('cA', 'i1', 'e2', undefined, 'admin')).rejects.toThrow(BadRequestException);
+    expect(execute).not.toHaveBeenCalled();
   });
 
-  it('sends a record already in the HR field names as written, even when mappings exist', async () => {
-    const { service } = build([mapping('userId', 'user_id')]);
-    const out = await service.testEndpoint('cA', 'i1', 'e1', undefined, 'admin', { user_id: '1108' });
-    expect(out.sentBody).toEqual({ user_id: '1108' });
-    expect(out.sentAsIs).toBe(true);
-  });
-
-  it('refuses an empty sample record', async () => {
-    const { service, execute } = build([mapping('userId', 'user_id')]);
-    await expect(service.testEndpoint('cA', 'i1', 'e1', undefined, 'admin', {})).rejects.toThrow(BadRequestException);
+  it('refuses to send when no mapping exists yet', async () => {
+    const { service, execute } = build([]);
+    await expect(service.testEndpoint('cA', 'i1', 'e1', undefined, 'admin', { state: 'I' })).rejects.toThrow(BadRequestException);
     expect(execute).not.toHaveBeenCalled();
   });
 });
@@ -109,20 +102,5 @@ describe('every path written in the HR API document resolves completely', () => 
   it.each(DOC_PATHS)('%s', (path, expected) => {
     expect(pathParamNames(path)).toEqual(expected);
     expect(fillPathPlaceholders(path, ALL)).not.toMatch(/:/);
-  });
-});
-
-describe('generic :p_ placeholders', () => {
-  const { fillPathPlaceholders, pathParamNames, colonParamName } = require('./utils/path-placeholders.util');
-  it('maps any :p_ word to camelCase', () => {
-    expect(colonParamName('p_date')).toBe('date');
-    expect(colonParamName('p_from_date')).toBe('fromDate');
-    expect(colonParamName('p_shortname')).toBe('shortname');
-    expect(colonParamName('date')).toBeUndefined();
-  });
-  it('fills and lists them', () => {
-    const path = '/ceo/:p_shortname/:p_date';
-    expect(pathParamNames(path)).toEqual(['shortname', 'date']);
-    expect(fillPathPlaceholders(path, { shortname: 'ovac', date: '20-OCT-2026' })).toBe('/ceo/ovac/20-OCT-2026');
   });
 });

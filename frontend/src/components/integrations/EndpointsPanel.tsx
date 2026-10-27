@@ -123,7 +123,32 @@ export default function EndpointsPanel({ integrationId, companyId }: EndpointsPa
   const [previewError, setPreviewError] = useState<string | undefined>(undefined);
   const [isPreviewing, setIsPreviewing] = useState(false);
 
+  // Number of ACTIVE field mappings per endpoint id, for the "Mapping needed" badge. Missing key = not known yet.
+  const [activeMappingCounts, setActiveMappingCounts] = useState<Record<string, number>>({});
+
   const purposeByName = useMemo(() => new Map(purposes.map((purpose) => [purpose.name, purpose])), [purposes]);
+
+  const countActiveMappings = useCallback(
+    async (endpointId: string): Promise<number | undefined> => {
+      try {
+        const result = await getFieldMappings(integrationId, endpointId, companyId, 1, 100);
+        return result.items.filter((mapping) => mapping.status === "Y").length;
+      } catch {
+        return undefined; // unknown: show no badge rather than a wrong one
+      }
+    },
+    [integrationId, companyId],
+  );
+
+  const loadMappingCounts = useCallback(
+    async (list: IntegrationEndpoint[]) => {
+      const entries = await Promise.all(
+        list.filter((endpoint) => endpoint.status === "ACTIVE").map(async (endpoint) => [endpoint.id, await countActiveMappings(endpoint.id)] as const),
+      );
+      setActiveMappingCounts(Object.fromEntries(entries.filter((entry): entry is readonly [string, number] => entry[1] !== undefined)));
+    },
+    [countActiveMappings],
+  );
 
   const load = useCallback(async () => {
     setStatus("loading");
@@ -135,6 +160,7 @@ export default function EndpointsPanel({ integrationId, companyId }: EndpointsPa
         getAvailableGlobalEndpoints().catch(() => []),
       ]);
       setEndpoints(endpointsResult.items);
+      void loadMappingCounts(endpointsResult.items);
       setPurposes([
         ...purposesResult,
         ...globalsResult.map<EndpointPurpose>((global) => ({
@@ -152,7 +178,7 @@ export default function EndpointsPanel({ integrationId, companyId }: EndpointsPa
       setLoadError(errorMessageFor(err, "We couldn't load endpoints for this integration."));
       setStatus("error");
     }
-  }, [integrationId, companyId]);
+  }, [integrationId, companyId, loadMappingCounts]);
 
   useEffect(() => {
     load();
@@ -269,7 +295,26 @@ export default function EndpointsPanel({ integrationId, companyId }: EndpointsPa
     return endpoint.direction === "OUTBOUND" && names.length > 0 ? JSON.stringify(Object.fromEntries(names.map((name) => [name, exampleValueFor(name)])), null, 2) : "{}";
   };
 
+  /**
+   * Does this endpoint stop working without at least one field mapping? Built-in purposes always do; custom and
+   * global endpoints only when they send data (POST needs a mapping; a GET falls back to the raw reply).
+   */
+  const needsMapping = (endpoint: IntegrationEndpoint): boolean => {
+    if (endpoint.status !== "ACTIVE" || endpoint.name === "OAUTH2_TOKEN_ENDPOINT") return false;
+    const purpose = purposeByName.get(endpoint.name);
+    if (purpose && !purpose.isGlobal) return true;
+    return endpoint.httpMethod !== "GET";
+  };
+  const isMappingMissing = (endpoint: IntegrationEndpoint): boolean =>
+    needsMapping(endpoint) && activeMappingCounts[endpoint.id] === 0;
+
   const toggleExpanded = (endpoint: IntegrationEndpoint) => {
+    // Closing a row is when mappings may just have changed in its editor: recount so the badge stays right.
+    if (expandedId === endpoint.id) {
+      void countActiveMappings(endpoint.id).then((count) => {
+        if (count !== undefined) setActiveMappingCounts((prev) => ({ ...prev, [endpoint.id]: count }));
+      });
+    }
     setExpandedId((current) => (current === endpoint.id ? null : endpoint.id));
     setPreviewResult(undefined);
     setPreviewError(undefined);
@@ -439,6 +484,15 @@ export default function EndpointsPanel({ integrationId, companyId }: EndpointsPa
                         <Badge>{endpoint.httpMethod}</Badge>
                         {purpose ? <Badge status="info">{purpose.label}</Badge> : <Badge>Custom</Badge>}
                         <Badge status={endpoint.status === "ACTIVE" ? "active" : "inactive"}>{endpoint.status}</Badge>
+                        {needsMapping(endpoint) && activeMappingCounts[endpoint.id] !== undefined && (
+                          isMappingMissing(endpoint) ? (
+                            <span title="Add at least one field mapping before this endpoint can be tested or used by the app. If you can't see the mapping section, ask your platform admin to enable custom mapping for this endpoint.">
+                              <Badge status="warning">Custom mapping required</Badge>
+                            </span>
+                          ) : (
+                            <Badge status="active">Mapped</Badge>
+                          )
+                        )}
                       </div>
                       <p className="mt-0.5 truncate font-mono text-xs text-slate-500">{endpoint.endpoint}</p>
                     </div>
@@ -451,6 +505,8 @@ export default function EndpointsPanel({ integrationId, companyId }: EndpointsPa
                         variant="secondary"
                         leftIcon={<PlayCircle className="h-3.5 w-3.5" />}
                         isLoading={testingId === endpoint.id}
+                        disabled={isMappingMissing(endpoint)}
+                        title={isMappingMissing(endpoint) ? "Add a field mapping first. This endpoint can't be tested without one." : undefined}
                         onClick={() => handleTestInbound(endpoint)}
                       >
                         Test
@@ -567,6 +623,8 @@ export default function EndpointsPanel({ integrationId, companyId }: EndpointsPa
                             className="ml-2"
                             leftIcon={<PlayCircle className="h-3.5 w-3.5" />}
                             isLoading={testingId === endpoint.id}
+                            disabled={isMappingMissing(endpoint)}
+                            title={isMappingMissing(endpoint) ? "Add a field mapping first. This endpoint can't be tested without one." : undefined}
                             onClick={() => handleSendRealTest(endpoint)}
                           >
                             Send real test to HR
@@ -614,6 +672,12 @@ export default function EndpointsPanel({ integrationId, companyId }: EndpointsPa
                           </div>
                         )}
                       </div>
+                    )}
+
+                    {isMappingMissing(endpoint) && endpoint.fieldMappingEnabled !== true && (
+                      <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                        Custom mapping is required before this endpoint can be tested or used by the app, but it is switched off for this endpoint. Ask your platform admin to enable custom mapping for this endpoint, then add the mapping here.
+                      </p>
                     )}
 
                     {endpoint.fieldMappingEnabled === true && (
