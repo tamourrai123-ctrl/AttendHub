@@ -55,4 +55,6 @@ export interface IntegrationEndpoint {
   fieldMappingEnabled: boolean;
   /** integration_detail.callable_by ('A' = ADMIN, default; 'E' = ALL). Only used by custom (non-reserved) endpoints. */
   callableBy: EndpointCallableBy;
+  /** Number of active field mappings on this endpoint. Filled only by the list route (one query for the whole page); undefined elsewhere. */
+  activeMappingCount?: number;
 }

@@ -36,6 +36,16 @@ function toBigIntId(id: string, field: string): bigint {
 export class PrismaFieldMappingsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
+  /** Active (status 'Y') mapping count per endpoint id for one integration, in ONE query. */
+  async countActiveByIntegration(companyId: string, integrationId: string): Promise<Record<string, number>> {
+    const rows = await this.prisma.integration_field_mapping.groupBy({
+      by: ['endpoint_id'],
+      where: { company_id: companyId, integration_id: toBigIntId(integrationId, 'integrationId'), status: 'Y' },
+      _count: { _all: true },
+    });
+    return Object.fromEntries(rows.map((row) => [row.endpoint_id.toString(), row._count._all]));
+  }
+
   async findAllByEndpoint(
     companyId: string,
     integrationId: string,

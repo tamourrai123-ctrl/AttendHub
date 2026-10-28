@@ -33,6 +33,8 @@ export interface IntegrationEndpoint {
   /** Super Admin switch, off by default. When true the Company Admin sees the custom field mapping section on this endpoint; saved mappings apply either way. */
   fieldMappingEnabled: boolean;
   callableBy: EndpointCallableBy;
+  /** Active field mappings on this endpoint; only present on the list response. */
+  activeMappingCount?: number;
 }
 
 export interface CreateEndpointInput {

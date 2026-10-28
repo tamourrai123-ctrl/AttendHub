@@ -65,16 +65,16 @@ describe('test endpoint (POST) sends a real mapped body', () => {
     expect(out.sampleBody).toEqual({ status: 'FAILED', message: 'ORA-01843: not a valid month' });
   });
 
-  it('refuses to test a built-in GET endpoint until it has a mapping', async () => {
+  it('with no mapping yet, a typed record is sent exactly as typed and flagged sentAsIs', async () => {
     const { service, execute } = build([]);
-    jest.spyOn(service, 'findOne').mockResolvedValue({ id: 'e2', name: 'COMPANY_INFO', httpMethod: 'GET' } as never);
-    await expect(service.testEndpoint('cA', 'i1', 'e2', undefined, 'admin')).rejects.toThrow(BadRequestException);
-    expect(execute).not.toHaveBeenCalled();
+    const out = await service.testEndpoint('cA', 'i1', 'e1', undefined, 'admin', { state: 'I' });
+    expect(execute).toHaveBeenCalledWith('cA', 'i1', 'e1', { shortname: 'DEMO' }, { state: 'I' });
+    expect(out.sentAsIs).toBe(true);
   });
 
-  it('refuses to send when no mapping exists yet', async () => {
-    const { service, execute } = build([]);
-    await expect(service.testEndpoint('cA', 'i1', 'e1', undefined, 'admin', { state: 'I' })).rejects.toThrow(BadRequestException);
+  it('refuses an empty sample record', async () => {
+    const { service, execute } = build([mapping('state', 'state')]);
+    await expect(service.testEndpoint('cA', 'i1', 'e1', undefined, 'admin', {})).rejects.toThrow(BadRequestException);
     expect(execute).not.toHaveBeenCalled();
   });
 });
