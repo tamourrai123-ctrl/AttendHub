@@ -135,6 +135,10 @@ export default function GlobalEndpoints() {
       setFormError("Name and label are required.");
       return;
     }
+    if (parseFields(form.fieldsText).length === 0) {
+      setFormError('Add at least one AttendHub field, one per line, like "emp_code, Employee code".');
+      return;
+    }
     const payload = {
       label,
       description: form.description.trim() || undefined,
@@ -203,7 +207,7 @@ export default function GlobalEndpoints() {
       header: "Direction",
       render: (row) => <Badge status="info">{row.direction === "INBOUND" ? "Inbound · GET" : `Outbound · ${row.defaultHttpMethod}`}</Badge>,
     },
-    { key: "fields", header: "Fields", render: (row) => (row.fields.length > 0 ? `${row.fields.length} fixed` : "Free text") },
+    { key: "fields", header: "Fields", render: (row) => (row.fields.length > 0 ? `${row.fields.length} fixed` : "None — edit and add fields") },
     { key: "callable", header: "Who can call it", render: (row) => (row.callableBy === "ALL" ? "Admin and Employees" : "Company Admin only") },
     { key: "status", header: "Status", render: (row) => <Badge status={row.status === "ACTIVE" ? "active" : "inactive"}>{row.status === "ACTIVE" ? "Active" : "Disabled"}</Badge> },
     {
@@ -317,7 +321,7 @@ export default function GlobalEndpoints() {
           </div>
 
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-700">AttendHub fields (optional)</label>
+            <label className="mb-1.5 block text-sm font-medium text-slate-700">AttendHub fields (required)</label>
             <textarea
               rows={4}
               value={form.fieldsText}
@@ -326,7 +330,7 @@ export default function GlobalEndpoints() {
               className="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-mono text-sm text-slate-900 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/40"
             />
             <p className="mt-1.5 text-xs text-slate-500">
-              One per line, as "field_name, Label". Company admins then pick from this list when mapping. Leave empty to let them type field names.
+              One per line, as "field_name, Label". Company admins pick from this list when mapping, and Auto-map uses it to match the HR response.
             </p>
           </div>
 

@@ -14,6 +14,9 @@ export function methodFitsDirection(direction: EndpointDirection, method: string
   return direction === 'INBOUND' ? method === 'GET' : method !== 'GET';
 }
 
+const MISSING_FIELDS_MESSAGE =
+  'Add at least one AttendHub field (one per line, "field_name, Label"). Company admins pick from this list when mapping.';
+
 function defaultMethodFor(direction: EndpointDirection): EndpointHttpMethod {
   return direction === 'INBOUND' ? 'GET' : 'POST';
 }
@@ -72,13 +75,15 @@ export class GlobalEndpointsService {
     if (!methodFitsDirection(dto.direction, method)) {
       throw new BadRequestException(`An ${dto.direction.toLowerCase()} endpoint cannot use ${method}.`);
     }
+    const fields = cleanFields(dto.fields);
+    if (fields.length === 0) throw new BadRequestException(MISSING_FIELDS_MESSAGE);
     const created = await this.repository.create({
       name,
       label: dto.label.trim(),
       description: dto.description?.trim() || undefined,
       direction: dto.direction,
       defaultHttpMethod: method,
-      fields: cleanFields(dto.fields),
+      fields,
       callableBy: dto.callableBy ?? 'ADMIN',
       createdBy: actorName,
     });
@@ -95,12 +100,15 @@ export class GlobalEndpointsService {
     if (!methodFitsDirection(direction, method)) {
       throw new BadRequestException(`An ${direction.toLowerCase()} endpoint cannot use ${method}.`);
     }
+    // Only checked when the request sends a field list, so older endpoints without fields can still be enabled/disabled.
+    const fields = dto.fields === undefined ? undefined : cleanFields(dto.fields);
+    if (fields && fields.length === 0) throw new BadRequestException(MISSING_FIELDS_MESSAGE);
     const updated = await this.repository.update(id, {
       label: dto.label?.trim(),
       description: dto.description?.trim(),
       direction,
       defaultHttpMethod: method,
-      fields: dto.fields === undefined ? undefined : cleanFields(dto.fields),
+      fields,
       callableBy: dto.callableBy,
       status: dto.status,
     });

@@ -657,6 +657,7 @@ export default function EndpointsPanel({ integrationId, companyId }: EndpointsPa
                         endpoint={endpoint}
                         // A global endpoint with no field list lets the admin type field names, like a custom endpoint.
                         purpose={purpose && (!purpose.isGlobal || purpose.fields.length > 0) ? purpose : undefined}
+                        testResult={testResult}
                       />
                     )}
                   </div>

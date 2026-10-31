@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
 import Button from "../ui/Button";
 import Modal from "../ui/Modal";
 import ConfirmDialog from "../ui/ConfirmDialog";
@@ -12,7 +12,53 @@ import { useToast } from "../feedback/ToastContext";
 import { createFieldMapping, deleteFieldMapping, getFieldMappings, updateFieldMapping } from "../../api/fieldMappings";
 import { ApiError } from "../../api/client";
 import type { CreateFieldMappingInput, FieldMappingRecord, FieldMappingTransform } from "../../types/fieldMapping";
-import type { EndpointPurpose, EndpointPurposeField, IntegrationEndpoint } from "../../types/endpoint";
+import type { EndpointPurpose, EndpointPurposeField, FieldDescriptor, IntegrationEndpoint, TestEndpointResult } from "../../types/endpoint";
+
+interface AutoMapProposal {
+  source: string; // HR response path, e.g. "items[].employee_id"
+  target: string; // AttendHub field
+}
+
+const normalizeKey = (value: string): string => value.toLowerCase().replace(/[^a-z0-9]/g, "");
+const leafOf = (path: string): string => path.replace(/\[\]/g, "").split(".").pop() ?? path;
+
+/**
+ * Turns the fields found by a successful Test into mapping proposals (inbound endpoints only).
+ * With a fixed AttendHub field list, an HR key is matched to the field whose name or label is the same ignoring
+ * case, "_" and "-"; keys with no match are left out. Without a list, the HR key's own name is used.
+ * Paths or targets that already have a mapping are skipped, so pressing it twice adds nothing.
+ */
+function buildAutoMapProposals(
+  detected: FieldDescriptor[] | undefined,
+  purpose: EndpointPurpose | undefined,
+  existing: FieldMappingRecord[],
+): { proposals: AutoMapProposal[]; unmatched: number } {
+  const usedSources = new Set(existing.map((m) => m.sourcePath));
+  const usedTargets = new Set(existing.map((m) => m.targetField));
+  const options = purpose ? purpose.fields : [];
+  const proposals: AutoMapProposal[] = [];
+  let unmatched = 0;
+  for (const item of detected ?? []) {
+    if (item.type === "object" || item.type === "array") continue;
+    if (usedSources.has(item.path)) continue;
+    const leaf = leafOf(item.path);
+    let target: string | undefined;
+    if (purpose) {
+      const key = normalizeKey(leaf);
+      target = options.find((f) => normalizeKey(f.field) === key || normalizeKey(f.label) === key)?.field;
+    } else {
+      target = leaf;
+    }
+    if (!target) {
+      unmatched += 1;
+      continue;
+    }
+    if (usedTargets.has(target)) continue;
+    usedTargets.add(target);
+    proposals.push({ source: item.path, target });
+  }
+  return { proposals, unmatched };
+}
 
 const TRANSFORM_OPTIONS: { value: FieldMappingTransform; label: string }[] = [
   { value: "NONE", label: "None — copy as-is" },
@@ -104,6 +150,8 @@ interface FieldMappingEditorProps {
   companyId: string;
   endpoint: IntegrationEndpoint;
   purpose?: EndpointPurpose;
+  /** The latest Test result for this endpoint; its detected fields feed the Auto-map button. */
+  testResult?: TestEndpointResult;
 }
 
 /**
@@ -124,7 +172,7 @@ interface FieldMappingEditorProps {
  * selector below (form.direction) rather than the endpoint having one fixed
  * direction — see isBidirectional()/fieldOptionsFor()/directionOfExisting().
  */
-export default function FieldMappingEditor({ integrationId, companyId, endpoint, purpose }: FieldMappingEditorProps) {
+export default function FieldMappingEditor({ integrationId, companyId, endpoint, purpose, testResult }: FieldMappingEditorProps) {
   const { showToast } = useToast();
   const isInbound = (purpose?.direction ?? endpoint.direction) === "INBOUND";
   const bidirectional = isBidirectional(purpose);
@@ -141,6 +189,40 @@ export default function FieldMappingEditor({ integrationId, companyId, endpoint,
 
   const [mappingPendingDelete, setMappingPendingDelete] = useState<FieldMappingRecord | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  const [isAutoMapOpen, setIsAutoMapOpen] = useState(false);
+  const [isAutoMapping, setIsAutoMapping] = useState(false);
+  const [autoMapError, setAutoMapError] = useState<string | undefined>(undefined);
+  // Auto-map reads a response, so it only exists for endpoints that bring data in (never the send-and-read-back purposes).
+  const canAutoMap = isInbound && !bidirectional;
+  const autoMap = buildAutoMapProposals(testResult?.success ? testResult.detectedFields : undefined, purpose, mappings);
+
+  const handleAutoMap = async () => {
+    setAutoMapError(undefined);
+    setIsAutoMapping(true);
+    let added = 0;
+    try {
+      for (const proposal of autoMap.proposals) {
+        await createFieldMapping(integrationId, endpoint.id, companyId, {
+          sourcePath: proposal.source,
+          targetField: proposal.target,
+          transformType: "NONE",
+          transformConfig: {},
+          sortOrder: mappings.length + added + 1,
+        });
+        added += 1;
+      }
+      showToast({ tone: "success", title: `${added} mapping${added === 1 ? "" : "s"} added` });
+      setIsAutoMapOpen(false);
+    } catch (err) {
+      setAutoMapError(
+        `${added > 0 ? `${added} added, then it stopped: ` : ""}${errorMessageFor(err, "Something went wrong while adding the mappings.")}`,
+      );
+    } finally {
+      setIsAutoMapping(false);
+      await load();
+    }
+  };
 
   const load = useCallback(async () => {
     setStatus("loading");
@@ -288,10 +370,36 @@ export default function FieldMappingEditor({ integrationId, companyId, endpoint,
     <div>
       <div className="mb-3 flex items-center justify-between">
         <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Field mappings</p>
-        <Button size="sm" variant="secondary" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={openCreateModal}>
-          Add mapping
-        </Button>
+        <div className="flex items-center gap-2">
+          {canAutoMap && (
+            <Button
+              size="sm"
+              variant="secondary"
+              leftIcon={<Sparkles className="h-3.5 w-3.5" />}
+              onClick={() => {
+                setAutoMapError(undefined);
+                setIsAutoMapOpen(true);
+              }}
+              disabled={autoMap.proposals.length === 0}
+              title={
+                testResult?.success
+                  ? autoMap.proposals.length === 0
+                    ? "Nothing new to map from the last test response."
+                    : undefined
+                  : "Press Test on this endpoint first, then Auto-map can read the HR response."
+              }
+            >
+              Auto-map
+            </Button>
+          )}
+          <Button size="sm" variant="secondary" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={openCreateModal}>
+            Add mapping
+          </Button>
+        </div>
       </div>
+      {canAutoMap && !testResult?.success && mappings.length === 0 && (
+        <p className="mb-3 text-xs text-slate-500">Tip: press Test on this endpoint, then Auto-map adds the mappings from the HR response in one click.</p>
+      )}
 
       {mappings.length === 0 ? (
         <EmptyState
@@ -522,6 +630,56 @@ export default function FieldMappingEditor({ integrationId, companyId, endpoint,
           />
 
           {formError && <p className="text-sm text-red-600">{formError}</p>}
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={isAutoMapOpen}
+        onClose={() => !isAutoMapping && setIsAutoMapOpen(false)}
+        title="Auto-map from the test response"
+        description={
+          purpose
+            ? "HR keys that match one of the fixed AttendHub fields are mapped as-is. You can edit any of them afterwards."
+            : "Each HR key is mapped to an AttendHub field with the same name. You can edit any of them afterwards."
+        }
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setIsAutoMapOpen(false)} disabled={isAutoMapping}>
+              Cancel
+            </Button>
+            <Button onClick={handleAutoMap} isLoading={isAutoMapping} disabled={autoMap.proposals.length === 0}>
+              Add {autoMap.proposals.length} mapping{autoMap.proposals.length === 1 ? "" : "s"}
+            </Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-3">
+          <div className="max-h-72 overflow-auto rounded-lg border border-slate-200">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 text-left text-xs font-medium text-slate-500">
+                <tr>
+                  <th className="px-3 py-2">HR system field</th>
+                  <th className="px-3 py-2" />
+                  <th className="px-3 py-2">AttendHub field</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {autoMap.proposals.map((proposal) => (
+                  <tr key={proposal.source}>
+                    <td className="px-3 py-2 font-mono text-xs text-slate-700">{proposal.source}</td>
+                    <td className="px-3 py-2 text-slate-300">→</td>
+                    <td className="px-3 py-2 font-mono text-xs text-slate-700">{proposal.target}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {autoMap.unmatched > 0 && (
+            <p className="text-xs text-slate-500">
+              {autoMap.unmatched} HR key{autoMap.unmatched === 1 ? "" : "s"} did not match any AttendHub field and {autoMap.unmatched === 1 ? "was" : "were"} left out. Use Add mapping for those.
+            </p>
+          )}
+          {autoMapError && <p className="text-sm text-red-600">{autoMapError}</p>}
         </div>
       </Modal>
 

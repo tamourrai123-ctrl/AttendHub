@@ -65,6 +65,21 @@ describe('GlobalEndpointsService', () => {
     await expect(service.create({ name: 'BAD_ONE', label: 'x', direction: 'INBOUND', defaultHttpMethod: 'POST' }, 'root')).rejects.toThrow(BadRequestException);
   });
 
+  it('refuses to create without at least one field', async () => {
+    const { service } = build();
+    await expect(service.create({ name: 'NO_FIELDS', label: 'x', direction: 'INBOUND' }, 'root')).rejects.toThrow(BadRequestException);
+    await expect(service.create({ name: 'NO_FIELDS', label: 'x', direction: 'INBOUND', fields: [{ field: ' ', label: '' }] }, 'root')).rejects.toThrow(
+      BadRequestException,
+    );
+  });
+
+  it('refuses to save an empty field list but allows updates that do not send fields', async () => {
+    const { service, repo } = build(stored());
+    await expect(service.update('1', { fields: [] }, 'root')).rejects.toThrow(BadRequestException);
+    await service.update('1', { status: 'INACTIVE' }, 'root');
+    expect(repo.update).toHaveBeenCalledWith('1', expect.objectContaining({ status: 'INACTIVE', fields: undefined }));
+  });
+
   it('switching direction resets the method to that direction default', async () => {
     const { service, repo } = build(stored());
     await service.update('1', { direction: 'OUTBOUND' }, 'root');
